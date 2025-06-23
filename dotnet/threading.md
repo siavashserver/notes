@@ -676,6 +676,38 @@ var task = Task.Factory.StartNew (() =>
 
 #### ValueTask vs Task
 
+- `Task<T>`:
+  - always allocates a heap object
+  - safe to await multiple times
+  - best for general async methods
+
+```csharp
+public async Task<int> GetDataAsync(string key)
+{
+    await Task.Delay(50);  // I/O or computation
+    return 42;
+}
+```
+
+- `ValueTask<T>`:
+  - avoids heap allocation when result completes synchronously
+  - cannot be awaited or accessed multiple times unless converted using
+    `.AsTask()`
+  - ideal when there is high-frequency calls to an async method, synchronous
+    completion is common, e.g. cached results
+
+```csharp
+private readonly Dictionary<string,int> _cache = new();
+
+public ValueTask<int> GetCachedValueAsync(string key)
+{
+    if (_cache.TryGetValue(key, out var val))
+        return new ValueTask<int>(val); // no heap allocation
+    
+    return new ValueTask<int>(FetchAndCacheAsync(key));
+}
+```
+
 ---
 
 ## Concurrent Collections
@@ -716,4 +748,3 @@ queue or stack is that a bag's `Add` method suffers almost no contention when
 called by many threads at once. Inside a concurrent bag, each thread gets its
 own private linked list. Elements are added to the private list that belongs to
 the thread calling Add, eliminating contention.
-
