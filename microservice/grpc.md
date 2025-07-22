@@ -25,8 +25,19 @@ serialization, and auto-generates strongly-typed client/server code from
 - Multiplexing: multiple streams per TCP connection vs one per connection in
   HTTP/1.1
 - Prioritization & server push: enhances performance
-- Binary framing: efficient, structured message framing
 - Header compression: HPACK in HTTP/2 significantly reduces overhead
+- Binary framing: efficient, structured message framing
+
+## gRPC vs REST
+
+| Feature   | REST (HTTP/1.1/2 + JSON)                | gRPC (HTTP/2 + Protobuf)                            |
+| --------- | --------------------------------------- | --------------------------------------------------- |
+| Protocol  | HTTP/1.1 (mostly), HTTP/2 (optional)    | HTTP/2 only                                         |
+| Format    | JSON (text, verbose, human-readable)    | Protobuf (binary, compact, fast)                    |
+| API style | Resource-focused with URLs & verbs      | Service-oriented RPC                                |
+| Streaming | Not native (requires WebSocket/polling) | Native support for all streaming modes              |
+| Tooling   | Lightweight, language agnostic          | Strong typing, code-gen, tight schema coupling      |
+| Use cases | Public APIs, browser compatibility      | Internal services, high performance, real-time data |
 
 ---
 
