@@ -98,18 +98,6 @@ First return cached content immediately, then in background fetch fresh content
 from network. Once fetched, update cache for future use. This balances fast UX
 with data freshness.
 
-### Can you explain lazy-loading and code-splitting practices in PWAs?
-
-Lazy loading defers loading content until needed (e.g., images, routes).
-Code‑splitting breaks bundle into smaller chunks, loading only what's necessary.
-Both reduce the initial load size and speed up first interaction.
-
-### How do you prompt a user to install a PWA?
-
-Listen for the `beforeinstallprompt` event on `window`; call `event.prompt()` to
-show the install dialog, and check `event.userChoice` to detect acceptance or
-dismissal.
-
 ### What is the `beforeinstallprompt` event and how do you use it?
 
 When a PWA meets install criteria, browsers fire `beforeinstallprompt`. You can
@@ -176,6 +164,10 @@ through lifecycle events, and inspect intercepted fetch events.
 
 ### How do you implement background sync with service workers?
 
+Background Sync (via the Sync API) allows PWAs to defer important tasks (like
+sending data to a server) when offline. The task is retried later automatically
+once the device regains connectivity, even if the PWA/Tab is closed.
+
 - Register a sync event:
   ```javascript
   navigator.serviceWorker.ready.then((sw) => sw.sync.register("syncTag"));
@@ -188,111 +180,6 @@ through lifecycle events, and inspect intercepted fetch events.
     }
   });
   ```
-
----
-
-## Service Workers (SW)
-
-### Registration
-
-```javascript
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker
-    .register("/sw.js")
-    .then((reg) => console.log("SW registered:", reg.scope))
-    .catch((err) => console.error("SW registration failed:", err));
-}
-```
-
-### Lifecycle Events
-
-- install: Pre‑cache essential assets.
-- activate: Clean up old caches.
-- fetch: Intercept network requests to apply caching strategies.
-
-### Example (`sw.js`)
-
-```javascript
-const CACHE_NAME = "pwa-cache-v1";
-const STATIC_ASSETS = [
-  "/",
-  "/index.html",
-  "/styles.css",
-  "/app.js",
-  "/icon-192.png",
-  "/icon-512.png",
-];
-
-// Install: pre‑cache static assets
-self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
-  );
-});
-
-// Activate: clean up old caches
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(
-          keys
-            .filter((key) => key !== CACHE_NAME)
-            .map((key) => caches.delete(key))
-        )
-      )
-  );
-});
-
-// Fetch: Cache First strategy
-self.addEventListener("fetch", (event) => {
-  event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
-  );
-});
-```
-
-## Push Notifications
-
-### Request Permission
-
-```javascript
-Notification.requestPermission().then((permission) => {
-  console.log("Notification permission:", permission);
-});
-```
-
-### Subscribe to Push Service
-
-```javascript
-navigator.serviceWorker.ready.then((registration) => {
-  const vapidPublicKey = "<YOUR_PUBLIC_KEY>";
-  registration.pushManager
-    .subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-    })
-    .then((subscription) => {
-      // send subscription to server
-      console.log("Push subscription:", subscription);
-    });
-});
-```
-
-### Handle Push in SW
-
-```javascript
-self.addEventListener("push", (event) => {
-  const data = event.data.json();
-  event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: "/icon-192.png",
-    })
-  );
-});
-```
 
 ---
 
