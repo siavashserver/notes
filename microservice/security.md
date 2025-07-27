@@ -87,8 +87,10 @@ for that).
 
 #### OAuth2 Authorization Flows (Grant types)
 
-- Authorization Code Flow
+- Authorization Code Flow (with PKCE)
+
   - App redirects to the Authorization Server login screen.
+
     - `response_type`: specifies authorization flow
       - `code`: Client wants an authorization code (**recommended, use with
         PKCE**)
@@ -97,6 +99,9 @@ for that).
       - `id_token token`: (OIDC only) Return ID Token + Access Token
       - `code id_token`: (OIDC only) Return code + ID Token
     - `client_id`: identifier of the client
+    - `code_challenge`: (PKCE) BASE64URL-ENCODE(SHA256(code_verifier))
+      - `code_verifier`: Random string (43–128 chars), stored client-side
+    - `code_challenge_method`: (PKCE) `S256`
     - `scope`: scope of the requested token
     - `state`: value set to maintain state between request and callback
       (optional)
@@ -113,10 +118,11 @@ for that).
     ```
 
   - After login, the server redirects back with an **authorization code**.
-  - Frontend (with PKCE) sends the code to the backend (See dedicated PKCE
-    section).
-  - Backend exchanges the code for an **access token** and optionally a
-    **refresh token**.
+    - (PKCE) The server stores the `code_challenge` temporarily with the
+      **authorization code**.
+  - Client (with PKCE) sends **authorization code** + **original code verifier**
+    to the backend
+  - Server responds with **access token** and optionally a **refresh token**.
     ```json
     {
       "access_token": "XZPURHNPWIDF",
@@ -173,8 +179,6 @@ for that).
   authorized.
 
 ### OpenID Connect
-
-
 
 ## Interview Questions
 
