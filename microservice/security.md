@@ -180,6 +180,26 @@ for that).
 
 ### OpenID Connect
 
+- Client -> Authorization Endpoint
+
+  - Query: `response_type=code`, `client_id`, `redirect_uri`, `scope=openid
+profile email`, `state`, `code_challenge` (hashed verifier),
+    `code_challenge_method=S256`.
+
+- User Authenticates at OpenID Provider (OP) -> Consent -> OP redirects back
+  with `code` + `state`.
+
+- Client <-> Token Endpoint
+
+  - Exchange `code` + `code_verifier` for `id_token` (JWT), `access_token`,
+    optionally `refresh_token`.
+
+- Client Validates ID token (issuer, audience, nonce, signature via JWKS).
+
+- API Calls: send `access_token` in `Authorization: Bearer access_token`.
+
+- UserInfo Endpoint (optional): fetch additional claims.
+
 ## Interview Questions
 
 ### What's the difference between authentication and authorization?
@@ -222,6 +242,15 @@ code to the requesting client.
 - The client exchanges the **authorization code** + **original code verifier**
   to get the access token. The server **validates** the code verifier against
   the stored challenge.
+
+### What’s the difference between ID token and Access token? (OpenID)
+
+ID token contains user identity claims; Access token is for resource/API
+authorization.
+
+### What’s the `state` parameter for? (OAuth, OpenID)
+
+CSRF protection: tie the auth request to the response.
 
 ### How do you revoke a JWT before it expires?
 
