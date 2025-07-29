@@ -47,3 +47,15 @@ signature = HMAC‑SHA256(
   secret_key
 )
 ```
+
+## JWE
+
+**JWE (JSON Web Encryption)** ensures **confidentiality**, encrypting the
+payload so that only intended recipients can read it, using symmetric or
+asymmetric encryption.
+
+## JWS
+
+**JWS (JSON Web Signature)** provides **data integrity and authenticity**, using
+a signature generated with a secret (HMAC) or private key (asymmetric) to ensure
+the payload hasn’t been tampered with.
