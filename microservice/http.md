@@ -147,7 +147,8 @@ issues.
 
 ### How does chunked transfer encoding in HTTP/1.1 work?
 
-Chunked encoding sends response data in chunks so the client can begin processing before the entire payload is generated.
+Chunked encoding sends response data in chunks so the client can begin
+processing before the entire payload is generated.
 
 ---
 
@@ -194,3 +195,76 @@ HTTPS (HyperText Transfer Protocol Secure) is simply HTTP layered over TLS
   symmetric cipher and session key.
 
 - Connection closes via normal TLS closure or timeout.
+
+---
+
+## OSI Model
+
+The OSI (Open Systems Interconnection) model is a 7‑layer reference framework
+created by ISO to standardize network communication functions and foster
+interoperability.
+
+| Layer (7 -> 1)      | Key Responsibilities                                                                           |
+| ------------------- | ---------------------------------------------------------------------------------------------- |
+| **7. Application**  | Interfaces apps with network protocols (e.g. HTTP, FTP, DNS, SMTP)                             |
+| **6. Presentation** | Formats, encrypts, compresses data (e.g. TLS/SSL, MIME, JSON/XML translation)                  |
+| **5. Session**      | Manages sessions, synchronization, full/half duplex communication, RPC, NetBIOS                |
+| **4. Transport**    | Ensures end-to-end delivery: segmentation, flow/error control, reliability (TCP/UDP/SCTP)      |
+| **3. Network**      | Logical addressing, routing packets across networks (IP, ICMP, OSPF, BGP)                      |
+| **2. Data Link**    | Framing, MAC addressing, error detection & correction (CRC), flow control; sublayers LLC & MAC |
+| **1. Physical**     | Transmits raw bits over physical media; handles cables, voltage, signal encoding, topology     |
+
+### Interview Questions
+
+#### What is the OSI model and what are its benefits?
+
+The OSI model (Open Systems Interconnection) is a conceptual framework defining
+7 layers of network communication. It enables modular design, standardization,
+interoperability, and helps isolate and troubleshoot issues at specific layers.
+
+#### Can you name the 7 layers and explain each briefly?
+
+- Application: Interfaces with user apps (HTTP, DNS).
+- Presentation: Data translation, encryption/compression.
+- Session: Establishing, managing, and terminating sessions.
+- Transport: Reliable, ordered, and connection multiplexing with TCP/UDP.
+- Network: Routing and logical IP addressing.
+- Data Link: Framing and error control on physical links.
+- Physical: Physical transmission of raw bits over media.
+
+#### What protocols/devices operate at each layer?
+
+- **Application**: HTTP, FTP, SMTP, DNS, DHCP, SNMP
+- **Presentation**: TLS/SSL, data formats (MIME, JSON)
+- **Session**: RPC, NetBIOS, session-control services
+- **Transport**: TCP, UDP, SCTP, QUIC (as similar)
+- **Network**: IP, ICMP, IGMP, OSPF, BGP
+- **Data Link**: ARP, MAC addressing, Ethernet, PPP, switches, bridges
+- **Physical**: Ethernet cabling, fiber, Wi‑Fi radio signals, hubs, repeaters
+
+#### What's encapsulation and decapsulation?
+
+Encapsulation wraps data with headers/trailers as it moves down the layers: each
+layer adds info specific to its function. Decapsulation removes these as packets
+travel upward. This modular layering helps maintain separation of concerns in
+communication.
+
+#### What distinguishes TCP from UDP at the Transport layer?
+
+- **TCP**: connection-oriented, reliable, ordered delivery, flow control,
+  retransmission.
+- **UDP**: connectionless, faster, no fault recovery, suited for streaming or
+  DNS.
+
+#### How do router and switch differ in OSI context?
+
+- **Switch**: operates at **Data Link** (Layer 2), forwarding frames using MAC
+  addresses.
+- **Router**: operates at **Network** (Layer 3), forwarding IP packets between
+  networks using routing tables.
+
+#### How do CRC and error handling work at Data Link layer?
+
+The Data Link layer adds a CRC checksum to each frame. The receiver recalculates
+the CRC and compares it: if mismatched, a retransmission is requested. Flow
+control ensures sender doesn't outpace receiver.
