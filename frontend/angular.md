@@ -811,6 +811,139 @@ fallback), you can:
 
 ---
 
+## `APP_INITIALIZER` – Run Startup Logic Before App Load
+
+Use `APP_INITIALIZER` to delay application bootstrap until async tasks complete,
+like loading configuration, fetching user settings, or initializing services.
+
+- Angular waits for the `Promise` to resolve before rendering the app.
+- Use `multi: true` to support multiple initializers.
+- Use cases: Feature toggles, i18n settings, auth token initialization.
+
+```ts
+@Injectable({ providedIn: "root" })
+class AppConfigService {
+  config: any;
+  loadConfig(): Promise<void> {
+    return this.http
+      .get("/assets/app-config.json")
+      .toPromise()
+      .then((data) => (this.config = data));
+  }
+}
+
+@NgModule({
+  providers: [
+    AppConfigService,
+    {
+      provide: APP_INITIALIZER,
+      useFactory: (cfg: AppConfigService) => () => cfg.loadConfig(),
+      deps: [AppConfigService],
+      multi: true,
+    },
+  ],
+})
+export class AppModule {}
+```
+
+---
+
+## HTTP Interceptors – Centralized HTTP Request/Response Handling
+
+Angular's `HttpInterceptor` interface allows you to intercept outgoing requests
+and incoming responses to add headers, show loaders, or handle errors.
+
+Common scenarios:
+
+- Adding auth headers
+- Global loading spinner (using `finalize`)
+- Mapping error format responses
+- Retrying/transformation or caching logic
+
+```ts
+@Injectable()
+export class HttpAuthErrorInterceptor implements HttpInterceptor {
+  intercept(
+    req: HttpRequest<any>,
+    next: HttpHandler
+  ): Observable<HttpEvent<any>> {
+    const token = this.authService.getToken();
+    const authReq = req.clone({
+      setHeaders: { Authorization: `Bearer ${token}` },
+    });
+
+    return next.handle(authReq).pipe(
+      tap((evt) => {
+        /* logging logic */
+      }),
+      catchError((error: HttpErrorResponse) => {
+        if (error.status === 401) {
+          this.router.navigate(["/login"]);
+        }
+        return throwError(() => error);
+      })
+    );
+  }
+}
+```
+
+```ts
+providers: [
+  {
+    provide: HTTP_INTERCEPTORS,
+    useClass: HttpAuthErrorInterceptor,
+    multi: true,
+  },
+];
+```
+
+---
+
+## Global Error Handler – Catch Uncaught Runtime Errors
+
+Angular's `ErrorHandler` captures uncaught exceptions anywhere in the app
+(lifecycle hooks, event handlers, template expressions). Combined with
+interceptors, you can unify error handling.
+
+```ts
+@Injectable({ providedIn: "root" })
+export class GlobalErrorHandler implements ErrorHandler {
+  constructor(private logger: ErrorLoggerService, private injector: Injector) {}
+
+  handleError(err: any): void {
+    const ngZone = this.injector.get(NgZone);
+    ngZone.run(() => {
+      console.error("Handled globally:", err);
+      this.logger.log(err);
+      // user-friendly UI or navigation
+    });
+  }
+}
+```
+
+```ts
+{ provide: ErrorHandler, useClass: GlobalErrorHandler }
+```
+
+### Important Notes
+
+- Use `ErrorHandler` for client-side exceptions.
+- When interceptors catch and **re-throw** HTTP errors, `ErrorHandler` can also
+  catch those.
+- If subscriber-level `.catchError(…)` handles the error and doesn't re-throw,
+  `ErrorHandler` won't be invoked for that error.
+
+### Interaction between Interceptors and ErrorHandler
+
+- An HTTP error first goes through **HttpInterceptor**.
+- If interceptor re-throws the original `HttpErrorResponse`, it can also be
+  caught by the **Global ErrorHandler**.
+- But if the interceptor **transforms** the error into a generic `Error`,
+  `ErrorHandler` won't detect it as HTTP error. Better to re-throw original
+  object.
+
+---
+
 ## Standalone Components
 
 Standalone components are Angular components, directives, or pipes that don't
@@ -1896,6 +2029,63 @@ httpCall$
 | `catchError()`               | Graceful error recovery                                | `catchError(() => of([]))`          |
 | `scan()`                     | Accumulate over time                                   | running sums or histories           |
 | `share()` / `shareReplay()`  | Multicast to multiple subscribers                      | avoid duplicate HTTP calls          |
+
+### What Is `catchError` and How Does It Work?
+
+- `catchError()` is an RxJS operator that intercepts error notifications within
+  a stream and **replaces** the error by returning a new observable. It behaves
+  like `try…catch` for observables.
+- Signature: `catchError((err, caught) => ObservableInput)`. You must return a
+  new observable: e.g., `of(value)`, `EMPTY`, `caught`, or `throwError(...)`.
+- Once an observable emits an error, it completes—**so retrying or returning
+  another observable is essential** to continue a stream.
+
+| Scenario                                | `catchError` Return                        | Result                                      |
+| --------------------------------------- | ------------------------------------------ | ------------------------------------------- |
+| Provide fallback value                  | `of(defaultValue)`                         | Stream continues with safe default          |
+| Silent complete                         | `EMPTY`                                    | Stream ends silently; no error thrown       |
+| Retry same stream                       | `caught$`                                  | Automatically resubscribes upon error       |
+| Propagate error to subscriber           | `throwError(err)`                          | Subscription error handler is triggered     |
+| Keep outer stream alive, inner fallback | `innerObs.pipe(catchError(() => of(...)))` | Outer observable continues on input changes |
+
+#### Return Fallback Value
+
+Best when you want the stream to succeed with a default:
+
+```ts
+this.data$ = this.http.get<Data>("/api/data").pipe(
+  catchError((err) => {
+    console.error(err);
+    return of({ items: [] });
+  })
+);
+```
+
+#### Silence Errors and Complete
+
+Use `EMPTY` to resolve the stream silently:
+
+```ts
+.pipe(catchError(err => {
+  console.error(err);
+  return EMPTY;
+}))
+```
+
+#### Retry or Re-subscribe Automatically
+
+Return the caught observable to effectively restart the stream:
+
+```ts
+.pipe(
+  catchError((err, caught$) => {
+    console.error(err);
+    return caught$;
+  })
+);
+```
+
+Use with caution—may loop endlessly if error source isn't resolved.
 
 ---
 
