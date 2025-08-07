@@ -1631,6 +1631,34 @@ CommonJS modules hinder static analysis and tree shaking. Angular warns when
 these are detected. You can whitelist dependencies or prefer ES modules when
 possible.
 
+- **CommonJS (CJS)** is a module system introduced around 2009 and became the
+  standard for **server-side JavaScript** and **Node.js** applications.
+
+- It uses **synchronous loading** and the `require()` function to import
+  modules, and `module.exports` or `exports` to expose content from a module.
+
+  ```js
+  // math.js
+  exports.add = (a, b) => a + b;
+
+  // app.js
+  const math = require("./math");
+  console.log(math.add(2, 3)); // 5
+  ```
+
+- Modules wrap code in function closures, giving each file its own private scope
+  and avoiding global namespace pollution.
+
+#### CJS vs ES Modules (ESM)
+
+- **ES Modules (ESM)** use static `import/export` syntax and are supported
+  natively in modern browsers and in Node.js with `.mjs` or `"type":"module"`
+  configuration.
+- ESM supports **static analysis**, enabling **tree-shaking** — dead code
+  elimination — which improves bundle size and performance.
+- In contrast, **CommonJS modules load and resolve at runtime**, making static
+  analysis difficult and tree-shaking far less effective.
+
 ### Source Maps & Named Chunks
 
 Disabling source maps (`sourceMap: false`) and named chunks (`namedChunks:
