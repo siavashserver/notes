@@ -510,6 +510,159 @@ export class ImpureFilterPipe implements PipeTransform {
 
 ---
 
+## Angular Lifecycle Hooks
+
+Angular provides several lifecycle hooks that allow you to tap into key events
+in a component's lifecycle. These hooks are called in a specific order:
+
+1. `ngOnChanges`: Called when any data-bound input property changes.
+2. `ngOnInit`: Called once, after the first `ngOnChanges`.
+3. `ngDoCheck`: Called during every change detection run.
+4. `ngAfterContentInit`: Called after content (ng-content) has been projected
+   into the component.
+5. `ngAfterContentChecked`: Called after every check of projected content.
+6. `ngAfterViewInit`: Called after the component's view and child views have
+   been initialized.
+7. `ngAfterViewChecked`: Called after every check of the component's view and
+   child views.
+8. `ngOnDestroy`: Called just before Angular destroys the component.
+
+```typescript
+import { Component, OnInit, OnChanges, SimpleChanges } from "@angular/core";
+
+@Component({
+  selector: "app-lifecycle-hooks",
+  template: `<p>{{ message }}</p>`,
+})
+export class LifecycleHooksComponent implements OnInit, OnChanges {
+  message = "Hello, Angular!";
+
+  ngOnChanges(changes: SimpleChanges) {
+    console.log("ngOnChanges:", changes);
+  }
+
+  ngOnInit() {
+    console.log("ngOnInit: Component initialized");
+  }
+}
+```
+
+---
+
+## `ngOnChanges`
+
+`ngOnChanges` is a lifecycle hook that is called when any data-bound property of
+a directive changes. It receives a `SimpleChanges` object that contains the
+current and previous values of the properties.
+
+```typescript
+import { Component, Input, OnChanges, SimpleChanges } from "@angular/core";
+
+@Component({
+  selector: "app-input-change",
+  template: `<p>{{ data }}</p>`,
+})
+export class InputChangeComponent implements OnChanges {
+  @Input() data: string;
+
+  ngOnChanges(changes: SimpleChanges) {
+    console.log("ngOnChanges:", changes);
+  }
+}
+```
+
+```html
+<app-input-change [data]="parentData"></app-input-change>
+```
+
+In this example, whenever `parentData` changes, `ngOnChanges` will be triggered
+in the child component.
+
+---
+
+## `ChangeDetectorRef`
+
+`ChangeDetectorRef` is a service that allows you to control change detection
+manually.
+
+```typescript
+import {
+  Component,
+  ChangeDetectorRef,
+  ChangeDetectionStrategy,
+} from "@angular/core";
+
+@Component({
+  selector: "app-manual-change-detection",
+  template: `<p>{{ counter }}</p>`,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class ManualChangeDetectionComponent {
+  counter = 0;
+
+  constructor(private cdRef: ChangeDetectorRef) {}
+
+  increment() {
+    this.counter++;
+    this.cdRef.detectChanges(); // Manually trigger change detection
+  }
+}
+```
+
+---
+
+## `@ViewChild` and `@ViewChildren`
+
+### `@ViewChild`
+
+`@ViewChild` allows a parent component to access a single child component,
+directive, or DOM element.
+
+```typescript
+import { Component, ViewChild, AfterViewInit } from "@angular/core";
+import { ChildComponent } from "./child.component";
+
+@Component({
+  selector: "app-parent",
+  template: `<app-child></app-child>`,
+})
+export class ParentComponent implements AfterViewInit {
+  @ViewChild(ChildComponent) child: ChildComponent;
+
+  ngAfterViewInit() {
+    console.log(this.child); // Access child component instance
+  }
+}
+```
+
+### `@ViewChildren`
+
+`@ViewChildren` is used to access multiple child components or elements.
+
+```typescript
+import {
+  Component,
+  ViewChildren,
+  QueryList,
+  AfterViewInit,
+} from "@angular/core";
+import { ChildComponent } from "./child.component";
+
+@Component({
+  selector: "app-parent",
+  template: `<app-child></app-child><app-child></app-child>`,
+})
+export class ParentComponent implements AfterViewInit {
+  @ViewChildren(ChildComponent) children: QueryList<ChildComponent>;
+
+  ngAfterViewInit() {
+    this.children.forEach((child) => console.log(child)); // Access all child components
+  }
+}
+```
+
+---
+
 ## `ng-template` vs `ng-container`
 
 - Use `ng-template` when you want **deferred, reusable, context-aware
@@ -562,6 +715,234 @@ export class ImpureFilterPipe implements PipeTransform {
 
 - Here, `ng-template` defines the reusable UI; `ng-container` hosts both the
   loop and outlet injection.
+
+---
+
+## Standalone Components
+
+Standalone components are Angular components, directives, or pipes that don't
+require declaration within an `NgModule`. Introduced in Angular 14 and refined
+in later versions, they simplify architecture by colocating dependencies and
+metadata inside the component itself — leading to modular, lightweight, and more
+maintainable codebases.
+
+Starting in Angular 19, `standalone: true` will become the **default**, marking
+a paradigm shift away from module-heavy architectures.
+
+### Key Advantages
+
+- Reduced Boilerplate: No need for feature modules just to declare components.
+- Improved Tree-Shaking: Dependencies are explicit, which enables better
+  dead-code elimination, smaller bundle sizes, and improved startup performance.
+- Simplified Lazy Loading: Components can be lazy-loaded directly using
+  `loadComponent`, no module scaffolding required.
+- Streamlined Testing: Standalone components can be tested without complex
+  module setup, improving clarity and reducing test boilerplate.
+- Better Developer Experience: Dependencies are visible within the component
+  decorator and auto-import handled by IDEs. Great for new developers and rapid
+  prototyping.
+
+### Basic Usage & Code Examples
+
+#### Declaring a Standalone Component
+
+```ts
+import { Component } from "@angular/core";
+import { CommonModule } from "@angular/common";
+
+@Component({
+  selector: "app-hello-world",
+  standalone: true,
+  imports: [CommonModule],
+  template: `<h1>Hello, Standalone!</h1>`,
+})
+export class HelloWorldComponent {}
+```
+
+No `NgModule` required — this component can be imported directly where needed.
+
+#### Using a Standalone Component
+
+```ts
+@Component({
+  selector: "app-parent",
+  standalone: true,
+  imports: [HelloWorldComponent],
+  template: `<hello-world></hello-world>`,
+})
+export class ParentComponent {}
+```
+
+Just import the component in the `imports:` array of another standalone
+component — no module needed.
+
+### When to Use vs. When to Keep NgModules
+
+#### Use Standalone When:
+
+- Building new features or small apps.
+- Creating reusable component libraries.
+- You want component-level lazy loading or deferred strategy.
+- Simplifying tests and reducing boilerplate.
+
+#### Stick with Modules When:
+
+- Existing large legacy app structured around modules.
+- You need group-level exports or feature boundaries.
+- Certain libraries or tooling still depend on `NgModule` configuration.
+
+---
+
+## Angular Routing
+
+Angular's `RouterModule` enables navigation within a Single Page Application
+without full page reloads. You define routes that match URL paths to components:
+
+```ts
+const routes: Routes = [
+  { path: "", component: HomeComponent, pathMatch: "full" },
+  { path: "dashboard", component: DashboardComponent },
+  { path: "**", component: NotFoundComponent },
+];
+@NgModule({ imports: [RouterModule.forRoot(routes)], exports: [RouterModule] })
+export class AppRoutingModule {}
+```
+
+Use `<router-outlet></router-outlet>` in templates as a placeholder where
+matched components render.
+
+## Route Guards: Controlling Access & Navigation
+
+Angular provides five main guard types:
+
+| Guard Type         | When It Runs                          | Return Type                 | Use Case                               |
+| ------------------ | ------------------------------------- | --------------------------- | -------------------------------------- |
+| `CanActivate`      | Before activating a route             | boolean or UrlTree or Async | Auth checks                            |
+| `CanActivateChild` | Before entering child routes          | boolean or UrlTree          | Protect feature sections               |
+| `CanDeactivate`    | Before leaving the current route      | boolean / Async boolean     | Unsaved change confirmation            |
+| `CanMatch`         | While matching a route (lazy loading) | boolean or UrlTree          | Feature flag routing, prevent download |
+| `Resolve`          | Before route activation               | Observable data             | Pre-fetch route data                   |
+
+### `CanActivate`
+
+Prevents unauthorized navigation into a route. Should return a boolean,
+`UrlTree`, `Promise`, or `Observable` of these.
+
+#### Class-based
+
+```ts
+@Injectable({ providedIn: "root" })
+export class AuthGuard implements CanActivate {
+  constructor(private auth: AuthService, private router: Router) {}
+  canActivate() {
+    return this.auth.isLoggedIn() || this.router.createUrlTree(["/login"]);
+  }
+}
+```
+
+Apply it:
+
+```ts
+{ path: 'dashboard', component: DashboardComponent, canActivate: [AuthGuard] }
+```
+
+#### Functional guard (Angular 16+)
+
+```ts
+export const authGuard: CanActivateFn = () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  return auth.isLoggedIn()
+    ? true
+    : router.createUrlTree(['/login']);
+};
+// usage
+{ path: 'dashboard', canActivate: [authGuard], component: DashboardComponent }
+```
+
+**Avoid manual `router.navigate()` inside guards—return a `UrlTree` instead.**
+
+### `CanActivateChild`
+
+Runs only for child routes. Good for protecting a set of nested routes:
+
+```ts
+{ path: 'admin', canActivateChild: [adminGuard], children: [
+   { path: 'users', component: UserListComponent },
+   { path: 'settings', component: SettingsComponent }
+]}
+```
+
+**If navigating within child routes, only `CanActivateChild` runs—not the parent
+`CanActivate`.**
+
+### `CanDeactivate`
+
+Prevents a user from leaving a route—useful for unsaved changes or cleanup
+prompts.
+
+```ts
+export interface CanComponentDeactivate {
+  canDeactivate(): boolean | Observable<boolean>;
+}
+
+export const unsavedGuard: CanDeactivateFn<CanComponentDeactivate> = (
+  component
+) => component.canDeactivate();
+```
+
+On routes:
+
+```ts
+{ path: 'editor', component: EditorComponent, canDeactivate: [unsavedGuard] }
+```
+
+Editors can implement:
+
+```ts
+canDeactivate(): boolean {
+  return this.form.dirty
+    ? confirm('Unsaved changes, leave?')
+    : true;
+}
+```
+
+Reusable approaches delegate logic via a common interface.
+
+### `CanLoad` & `CanMatch`
+
+- `CanLoad` (now deprecated class-based) prevents downloading a lazy module for
+  unauthorized users.
+- `CanMatch` replaces it in Angular 14+: it prevents route matching and
+  therefore lazy chunk loading entirely.
+
+```ts
+export const featureFlagGuard: CanMatchFn = (route, segments) => {
+  const fs = inject(FeatureService);
+  return fs.isEnabled('betaFeature');
+};
+
+{ path: 'beta', loadChildren: () => import('./beta.module').then(m => m.BetaModule), canMatch: [featureFlagGuard] }
+```
+
+This prevents large chunks from downloading unless allowed.
+
+### `Resolve`
+
+Fetches data before navigation completes; ensures components have pre-fetched
+data available. Often used to avoid blank intermediate states.
+
+```ts
+@Injectable({providedIn: 'root'})
+export class ItemResolver implements Resolve<Item> {
+  constructor(private svc: ItemService) {}
+  resolve(route: ActivatedRouteSnapshot) {
+    return this.svc.getItem(route.params['id']);
+  }
+}
+
+{ path: 'item/:id', component: ItemComponent, resolve: { item: ItemResolver } }
+```
 
 ---
 
