@@ -718,6 +718,99 @@ export class ParentComponent implements AfterViewInit {
 
 ---
 
+## `<ng-content>`
+
+Angular allows projecting multiple pieces of content into specific slots inside
+a component template by using the `select` attribute on `<ng-content>` elements.
+This is especially useful for building reusable container components (e.g.,
+cards, modals) that accept content for header, body, footer, and more.
+
+### Example: Card Component with Header, Body & Footer Slots
+
+#### Component Template (`card.component.html`)
+
+```html
+<div class="card">
+  <header class="card-header">
+    <ng-content select="[header]"></ng-content>
+  </header>
+  <section class="card-body">
+    <ng-content select="[body]"></ng-content>
+  </section>
+  <footer class="card-footer">
+    <ng-content select="[footer]"></ng-content>
+  </footer>
+</div>
+```
+
+- `<ng-content select="[header]="">` matches any projected element tagged with
+  the `header` attribute.
+- You can also include an unselective `<ng-content>` for default slot content if
+  needed.
+
+#### Usage in Parent Template (`app.component.html`)
+
+```html
+<app-card>
+  <div header>
+    <h3>Card Title</h3>
+  </div>
+  <div body>
+    <p>This is the main card content.</p>
+  </div>
+  <div footer>
+    <button>Save</button>
+  </div>
+</app-card>
+```
+
+### Multi-Slot Projection with CSS Selectors or Elements
+
+Instead of attributes, you can use CSS selectors or component selectors:
+
+```html
+<ng-content select="h1, h2, h3"></ng-content>
+<ng-content select=".special-content"></ng-content>
+```
+
+### Default / Fallback Slot Behavior
+
+If you include an unqualified `<ng-content>` (without `select`), any content not
+matching named slots will be projected there:
+
+```html
+<ng-content select="[header]"></ng-content> <ng-content></ng-content>
+<!-- fallback/default slot -->
+```
+
+### Slot Ordering & Defaults
+
+- Angular matches content to the **first matching slot only**. Once content is
+  projected, it’s removed from the host and placed. It won’t appear in other
+  slots.
+- To reuse content across slots or conditionally reinsert it, use `ng-template`
+  with `ngTemplateOutlet` referencing that content fragment separately.
+- Angular initializes projected content even if it’s hidden via conditional
+  logic (`*ngIf`). Angular won’t delay content initialization in `<ng-content>`;
+  you must use `ng-template` to avoid instantiation unless required.
+
+### Conditional Rendering or Default Content
+
+To support optional content (e.g., show custom header if provided, otherwise
+fallback), you can:
+
+- Provide default fallback content within `<ng-content>` tags:
+
+```html
+<ng-content select="[header]">Default Header</ng-content>
+```
+
+- Or use **`@ContentChildren`** or a custom directive (`slot`) to detect if
+  content was provided, then conditionally render or default to fallback using
+  `ngTemplateOutlet`.
+
+---
+
 ## Standalone Components
 
 Standalone components are Angular components, directives, or pipes that don't
