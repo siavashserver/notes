@@ -1950,6 +1950,51 @@ this.searchControl.valueChanges
 - `switchMap`: cancels previous HTTP call on new query
 - `catchError`: handles network errors gracefully
 
+#### Cancelling HTTP Requests
+
+Angular `HttpClient` supports request cancellation via **RxJS `unsubscribe()`**
+or **`takeUntil()`**.
+
+```ts
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
+
+private destroy$ = new Subject<void>();
+
+this.http.get('/api/data')
+  .pipe(takeUntil(this.destroy$))
+  .subscribe(data => {
+    console.log(data);
+  });
+
+// Cancel the request (e.g., on component destroy)
+this.destroy$.next();
+this.destroy$.complete();
+```
+
+> 🔍 Angular 16+ `HttpClient` now **supports `AbortSignal`** via `signal` option
+> if you're using fetch under the hood.
+
+```ts
+const controller = new AbortController();
+
+this.http
+  .get("/api/data", {
+    signal: controller.signal as any, // TS compatibility needed
+  })
+  .subscribe({
+    next: (data) => console.log(data),
+    error: (err) => {
+      if (err.name === "AbortError") {
+        console.log("Request cancelled");
+      }
+    },
+  });
+
+// To cancel:
+controller.abort();
+```
+
 #### One-Time Subscription / Preventing Memory Leaks
 
 Read a single value from an observable once (e.g. route parameters):

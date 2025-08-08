@@ -367,6 +367,20 @@ fetch("https://jsonplaceholder.typicode.com/posts", { signal })
 setTimeout(() => controller.abort(), 100);
 ```
 
+#### Under the hood
+
+- Fetch requests go through a **controller layer** managing lifecycle and
+  resources.
+- The request object has a **reference to the signal**.
+- The network stack (e.g., via Blink or networking libraries like
+  `net::URLLoader`) polls or subscribes to signal state.
+- If `abort()` is triggered:
+
+  - Ongoing TCP requests are forcibly closed.
+  - Response stream is terminated.
+  - Memory is cleaned up.
+  - JS layer gets an `AbortError`.
+
 ### XHR (Legacy)
 
 ```javascript
