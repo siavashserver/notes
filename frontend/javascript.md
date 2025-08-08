@@ -424,3 +424,220 @@ xhr.send();
   third-party APIs).
 
 ---
+
+## Object
+
+A **JavaScript Object** is a **key-value data structure** used to store and
+organize data. It’s the foundation of most things in JavaScript, including
+functions, arrays, and even classes.
+
+```js
+const user = {
+  name: "Alice",
+  age: 30,
+  greet: function () {
+    console.log(`Hello, I'm ${this.name}`);
+  },
+};
+```
+
+### Object Properties
+
+- **Key-value pairs** where keys are strings (or Symbols).
+- Can be **data properties** or **accessor properties** (getters/setters).
+- Stored in a **property descriptor** object with attributes like:
+
+  - `value`
+  - `writable`
+  - `enumerable`
+  - `configurable`
+
+```js
+Object.defineProperty(user, "role", {
+  value: "admin",
+  writable: false,
+  enumerable: true,
+  configurable: true,
+});
+```
+
+### Object Methods
+
+| Method                       | Purpose                        |
+| ---------------------------- | ------------------------------ |
+| `Object.keys(obj)`           | Returns array of keys          |
+| `Object.values(obj)`         | Returns array of values        |
+| `Object.entries(obj)`        | Returns key-value pairs        |
+| `Object.assign(target, src)` | Copies properties              |
+| `Object.freeze(obj)`         | Makes object immutable         |
+| `Object.seal(obj)`           | Prevents adding/removing props |
+| `obj.hasOwnProperty("key")`  | Checks `key` existence         |
+
+### Prototype Chain & Inheritance
+
+All objects inherit from `Object.prototype` by default unless created with
+`Object.create(null)`.
+
+```js
+console.log({}.toString()); // [object Object]
+```
+
+Custom objects can inherit methods via prototypes:
+
+```js
+function Person(name) {
+  this.name = name;
+}
+Person.prototype.sayHello = function () {
+  return `Hi, I'm ${this.name}`;
+};
+```
+
+### Interview Questions
+
+#### What is the difference between `Object.create(null)` and `{}`?
+
+- `{}` creates an object with a prototype chain (inherits from
+  `Object.prototype`).
+- `Object.create(null)` creates a truly **plain object** with no inherited
+  properties.
+
+#### How do you make an object immutable?
+
+Use `Object.freeze(obj)`. It prevents:
+
+- Adding/removing properties.
+- Changing existing property values.
+- Modifying descriptors.
+
+```js
+const obj = Object.freeze({ a: 1 });
+obj.a = 2; // No effect
+```
+
+#### What's the difference between `Object.assign()` and spread `...`?
+
+Both copy enumerable own properties:
+
+- `Object.assign()` copies properties and returns the target object.
+- Spread `...` syntax is cleaner but can't copy non-enumerables or preserve
+  property descriptors.
+
+```js
+const obj1 = { a: 1 };
+const obj2 = { b: 2 };
+
+const merged = { ...obj1, ...obj2 }; // cleaner
+```
+
+#### What are getter and setter properties?
+
+They allow **computed access** to object properties.
+
+```js
+const user = {
+  firstName: "John",
+  lastName: "Doe",
+  get fullName() {
+    return `${this.firstName} ${this.lastName}`;
+  },
+  set fullName(name) {
+    [this.firstName, this.lastName] = name.split(" ");
+  },
+};
+```
+
+#### Explain object inheritance in JavaScript.
+
+JavaScript uses **prototypal inheritance**. Objects inherit from other objects
+via the `[[Prototype]]` internal link (set using `__proto__` or
+`Object.setPrototypeOf()`).
+
+#### How do you clone an object in JS?
+
+> Better: use `structuredClone(obj)` (modern browsers).
+
+- Shallow clone
+
+  ```js
+  const clone = { ...original };
+  ```
+
+- Deep clone (limited):
+
+  ```js
+  const deepClone = JSON.parse(JSON.stringify(original));
+  ```
+
+#### How to Check if an Object Has a Key
+
+- Using `"key" in obj`
+
+  Checks whether the key exists **anywhere in the object or its prototype
+  chain**.
+
+  ```js
+  const obj = { name: "Alice" };
+  console.log("name" in obj); // true
+  ```
+
+- Using `obj.hasOwnProperty("key")`
+
+  Checks whether the key exists **only directly on the object** (not inherited).
+
+  ```js
+  console.log(obj.hasOwnProperty("name")); // true
+  ```
+
+- Using `Object.keys(obj).includes("key")`
+
+  Less performant, returns true only if the key is **own and enumerable**.
+
+---
+
+## JavaScript Prototypes
+
+Every JavaScript object has an internal link to another object called its
+**prototype**. They define the **inheritance model** in JavaScript.
+
+- When accessing a property or method:
+
+  1. JavaScript looks at the object itself.
+  2. If not found, it checks the object’s prototype (`__proto__` or
+     `[[Prototype]]`).
+  3. This continues recursively up the prototype chain.
+
+### Setting and Getting Prototype
+
+```js
+const animal = {
+  eats: true,
+};
+
+const rabbit = Object.create(animal);
+rabbit.jumps = true;
+
+console.log(rabbit.eats); // true (from prototype)
+console.log(Object.getPrototypeOf(rabbit) === animal); // true
+```
+
+### Object Prototype Chain
+
+```js
+function Person(name) {
+  this.name = name;
+}
+Person.prototype.greet = function () {
+  return `Hi, I'm ${this.name}`;
+};
+
+const p = new Person("Bob");
+console.log(p.greet()); // Hi, I'm Bob
+```
+
+Here:
+
+- `p` has its own `name`
+- `greet()` is accessed via `Person.prototype`
+
+---
