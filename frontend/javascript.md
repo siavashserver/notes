@@ -336,6 +336,37 @@ async function fetchData() {
 }
 ```
 
+### Request Cancellation (Fetch & Controller API)
+
+The **Fetch API** doesn’t provide a built-in `.abort()` method, but cancellation
+is made possible via the **AbortController API**, which is part of the DOM
+standard and integrated with `fetch()`. `AbortController` is used to **signal
+cancellation** to one or more operations (like `fetch()`) via an associated
+`AbortSignal`.
+
+- `controller.abort()` triggers cancellation.
+- The `fetch` will throw an `AbortError`, which you should catch.
+- The `signal` object is passed to the `fetch()` options.
+
+```javascript
+const controller = new AbortController();
+const signal = controller.signal;
+
+fetch("https://jsonplaceholder.typicode.com/posts", { signal })
+  .then((response) => response.json())
+  .then((data) => console.log(data))
+  .catch((err) => {
+    if (err.name === "AbortError") {
+      console.log("Fetch aborted!");
+    } else {
+      console.error("Fetch error:", err);
+    }
+  });
+
+// Cancel the fetch after 100ms
+setTimeout(() => controller.abort(), 100);
+```
+
 ### XHR (Legacy)
 
 ```javascript
