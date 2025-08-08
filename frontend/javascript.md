@@ -641,3 +641,91 @@ Here:
 - `greet()` is accessed via `Person.prototype`
 
 ---
+
+## Classes
+
+JavaScript introduced the `class` syntax in ES6 as **syntactic sugar** over its
+existing prototype-based object model. Under the hood, nothing fundamentally
+changes—it's still prototype inheritance at work.
+
+```js
+class Person {
+  constructor(name) {
+    this.name = name;
+  }
+  greet() {
+    return `Hi, I'm ${this.name}`;
+  }
+}
+
+class Student extends Person {
+  constructor(name, id) {
+    super(name);
+    this.id = id;
+  }
+}
+```
+
+### Prototypes: The Real Backbone
+
+- Each function has a `prototype` property used when creating instances.
+- An object created via `new` links its internal `[[Prototype]]` (accessible via
+  `__proto__` or `Object.getPrototypeOf`) to that prototype object.
+- Method/property lookup walks up this prototype chain.
+
+### Classes vs Prototype-Based Approach
+
+Classes don't introduce new behavior—they merely wrap the classical prototype
+mechanism into a cleaner syntax. You still get:
+
+- **Static methods**: defined directly on the class/function
+- **Instance methods**: defined on the prototype and inherited by instances
+
+```js
+class Foo {
+  static staticMethod() {}
+  instanceMethod() {}
+}
+```
+
+Is equivalent to:
+
+```js
+function Foo() {}
+Foo.staticMethod = function () {};
+Foo.prototype.instanceMethod = function () {};
+```
+
+And instances use `instanceMethod` via the prototype chain, while `staticMethod`
+is called on the class itself.
+
+### Interview Questions
+
+#### What’s the difference between a class and an object in JavaScript?
+
+- A **class** is syntactic sugar—a function under the hood.
+- An **object** is an instance created with `new`, linked to the class's
+  `prototype`.
+
+#### How are class methods implemented?
+
+- **Static methods** are assigned directly on the constructor function.
+- **Instance methods** live on the `prototype`, shared across all instances.
+
+#### Can you mix class syntax and manual prototype extension?
+
+Yes. After defining:
+
+```js
+class Cat {}
+Cat.prototype.meow = () => console.log("Meow");
+```
+
+This adds `meow` to all Cat instances—same as via class body but done manually.
+
+#### Is class-based inheritance different from prototype inheritance?\*\*
+
+No—class-based inheritance in JS is just a more readable wrapper around
+prototype inheritance.
+
+---
