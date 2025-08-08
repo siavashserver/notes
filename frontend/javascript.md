@@ -304,3 +304,78 @@ self.onmessage = function (event) {
 ```
 
 ---
+
+## Data Fetching
+
+### Fetch API (Modern)
+
+```javascript
+fetch("https://api.example.com/data")
+  .then((response) => {
+    if (!response.ok) {
+      throw new Error("HTTP error " + response.status);
+    }
+    return response.json();
+  })
+  .then((data) => console.log(data))
+  .catch((error) => console.error(error));
+```
+
+With `async/await`:
+
+```javascript
+async function fetchData() {
+  try {
+    const res = await fetch("https://api.example.com/data");
+    if (!res.ok) throw new Error("HTTP error " + res.status);
+    const data = await res.json();
+    console.log(data);
+  } catch (err) {
+    console.error(err);
+  }
+}
+```
+
+### XHR (Legacy)
+
+```javascript
+const xhr = new XMLHttpRequest();
+xhr.open("GET", "https://api.example.com/data", true);
+
+xhr.onload = function () {
+  if (xhr.status === 200) {
+    const data = JSON.parse(xhr.responseText);
+    console.log(data);
+  } else {
+    console.error("Error: " + xhr.status);
+  }
+};
+
+xhr.onerror = function () {
+  console.error("Request failed");
+};
+
+xhr.send();
+```
+
+### Interview Questions
+
+#### When would you still use XHR?
+
+- When you need **upload/download progress events**.
+- When working on legacy projects with **IE 11 or older** support.
+
+#### Why is Fetch preferred in modern apps?
+
+- Cleaner syntax, better composability with Promises and `async/await`.
+- Easier to work with in modern SPAs (e.g., React, Angular).
+- Supports **streaming** and `AbortController`.
+
+#### What are pitfalls of Fetch?
+
+- Does **not reject** the promise on HTTP errors like 404/500 — must manually
+  check `response.ok`.
+- No built-in upload/download progress tracking (requires `ReadableStream` or
+  third-party APIs).
+
+---
