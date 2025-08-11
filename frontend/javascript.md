@@ -728,4 +728,112 @@ This adds `meow` to all Cat instances—same as via class body but done manually
 No—class-based inheritance in JS is just a more readable wrapper around
 prototype inheritance.
 
+#### What are property descriptors in JS?
+
+Property descriptors define how a property behaves. You can get them using
+`Object.getOwnPropertyDescriptor(obj, key)`.
+
+Attributes include:
+
+- `value`
+- `writable`
+- `enumerable`
+- `configurable`
+
+#### What is the difference between `Object.create(null)` and `{}`?
+
+- `{}` creates an object with a prototype chain (inherits from
+  `Object.prototype`).
+- `Object.create(null)` creates a truly **plain object** with no inherited
+  properties.
+
+Useful for dictionaries or maps where inherited properties could cause
+conflicts.
+
+#### How do you make an object immutable?
+
+Use `Object.freeze(obj)`. It prevents:
+
+- Adding/removing properties.
+- Changing existing property values.
+- Modifying descriptors.
+
+```js
+const obj = Object.freeze({ a: 1 });
+obj.a = 2; // No effect
+```
+
+#### What's the difference between `Object.assign()` and spread `...`?
+
+Both copy enumerable own properties:
+
+- `Object.assign()` copies properties and returns the target object.
+- Spread `...` syntax is cleaner but can't copy non-enumerables or preserve
+  property descriptors.
+
+```js
+const obj1 = { a: 1 };
+const obj2 = { b: 2 };
+
+const merged = { ...obj1, ...obj2 }; // cleaner
+```
+
+#### What are getter and setter properties?
+
+**Answer:**
+
+```js
+const user = {
+  firstName: "John",
+  lastName: "Doe",
+  get fullName() {
+    return `${this.firstName} ${this.lastName}`;
+  },
+  set fullName(name) {
+    [this.firstName, this.lastName] = name.split(" ");
+  },
+};
+```
+
+They allow **computed access** to object properties.
+
+#### Explain object inheritance in JavaScript
+
+JavaScript uses **prototypal inheritance**. Objects inherit from other objects
+via the `[[Prototype]]` internal link (set using `__proto__` or
+`Object.setPrototypeOf()`).
+
+#### How do you check if an object has a specific key
+
+- Use `"key" in obj` for any key (own + inherited).
+- Use `obj.hasOwnProperty("key")` for own keys only.
+
+#### What is the prototype of an object?
+
+It's another object from which the current object **inherits** methods and
+properties.
+
+#### What’s the difference between `__proto__`, `prototype`, and `[[Prototype]]`?
+
+| Term            | Description                                                                                                                    |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `__proto__`     | Legacy accessor for `[[Prototype]]`. Still widely supported.                                                                   |
+| `prototype`     | A property on **constructor functions**, used when creating new instances.                                                     |
+| `[[Prototype]]` | The internal slot representing the prototype chain. Not accessible directly, but can be read via `Object.getPrototypeOf(obj)`. |
+
+#### Why is `hasOwnProperty` safer than `"key" in obj`
+
+Because `"key" in obj` checks inherited properties too, which can cause bugs
+when looping or validating object shape.
+
+#### Can we override inherited methods?
+
+Yes. You can override them directly on the object.
+
+```js
+const obj = Object.create({ greet: () => "Hi" });
+obj.greet = () => "Hello";
+console.log(obj.greet()); // "Hello"
+```
+
 ---
