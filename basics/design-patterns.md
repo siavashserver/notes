@@ -66,18 +66,116 @@ coupling between client code and concrete types.
 Ensures that a class has only one instance and provides a global access point to
 it.
 
+#### Basic Singleton
+
 ```csharp
-public sealed class Logger
+public class Singleton
 {
-    private static readonly Lazy<Logger> _instance
-      = new Lazy<Logger>(() => new Logger());
+    private static Singleton _instance;
 
-    public static Logger Instance => _instance.Value;
+    public static Singleton Instance
+    {
+        get
+        {
+            if (_instance == null)
+                _instance = new Singleton();
+            return _instance;
+        }
+    }
 
-    private Logger() { /* private constructor */ }
+    private Singleton() { }
+}
+```
 
-    public void Log(string message)
-        => Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] {message}");
+#### Thread-Safe with `lock` (Eager Locking)
+
+```csharp
+public class Singleton
+{
+    private static Singleton _instance;
+    private static readonly object _lock = new object();
+
+    public static Singleton Instance
+    {
+        get
+        {
+            lock (_lock)
+            {
+                if (_instance == null)
+                    _instance = new Singleton();
+            }
+            return _instance;
+        }
+    }
+
+    private Singleton() { }
+}
+```
+
+#### Double-Checked Locking (Lazy and Efficient)
+
+```csharp
+public class Singleton
+{
+    private static Singleton _instance;
+    private static readonly object _lock = new object();
+
+    public static Singleton Instance
+    {
+        get
+        {
+            if (_instance == null)
+            {
+                lock (_lock)
+                {
+                    if (_instance == null)
+                        _instance = new Singleton();
+                }
+            }
+            return _instance;
+        }
+    }
+
+    private Singleton() { }
+}
+```
+
+#### Static Initialization (Eager and Thread-Safe)
+
+```csharp
+public class Singleton
+{
+    private static readonly Singleton _instance = new Singleton();
+
+    public static Singleton Instance => _instance;
+
+    private Singleton() { }
+}
+```
+
+#### `Lazy<T>` Singleton (Best Practice in Modern C#)
+
+```csharp
+public class Singleton
+{
+    private static readonly Lazy<Singleton> _instance =
+        new Lazy<Singleton>(() => new Singleton());
+
+    public static Singleton Instance => _instance.Value;
+
+    private Singleton() { }
+}
+```
+
+#### Singleton Using Static Class
+
+```csharp
+public static class Singleton
+{
+    public static void Log(string message)
+    {
+        Console.WriteLine($"[{DateTime.Now}] {message}");
+    }
 }
 ```
 
