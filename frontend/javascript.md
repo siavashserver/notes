@@ -1996,3 +1996,181 @@ function onmouseup() {
   window.removeEventListener("mouseup", onmouseup);
 }
 ```
+
+---
+
+## DOM Element Selection
+
+### getElementById
+
+> Returns an `Element` object describing the DOM element object matching the
+> specified ID, or `null` if no matching element was found in the document.
+
+> Unlike some other element-lookup methods such as `Document.querySelector()`
+> and `Document.querySelectorAll()`, `getElementById()` is only available as a
+> method of the global `document` object, and **not** available as a method on
+> all element objects in the DOM. Because ID values must be unique throughout
+> the entire document, there is no need for "local" versions of the function.
+
+```javascript
+const element = document.getElementById("foo");
+```
+
+```html
+<div id="foo">SELECTED</div>
+```
+
+### getElementsByClassName
+
+```javascript
+const elements = document.getElementsByClassName("foo");
+```
+
+```html
+<div class="foo">SELECTED</div>
+<div class="foo bar">SELECTED</div>
+```
+
+### querySelectorAll
+
+```javascript
+const elementById = document.querySelector("#foo");
+const elementsByClass = document.querySelectorAll("p, .bar");
+```
+
+```html
+<div id="foo">SELECTED</div>
+<p>SELECTED</p>
+<div class="bar">SELECTED</div>
+```
+
+### Node tree traversal
+
+```javascript
+const parentElement = element.parentElement;
+const children = element.children;
+
+const firstElementChild = element.firstElementChild;
+const lastElementChild = element.lastElementChild;
+
+const nextElementSibling = element.nextElementSibling;
+const previousElementSibling = element.previousElementSibling;
+```
+
+## Manipulation
+
+### createElement
+
+```javascript
+const element = document.createElement("div");
+```
+
+### remove
+
+```javascript
+element.remove();
+```
+
+### append
+
+```javascript
+const parent = document.getElementById("foo");
+const child = document.createElement("div");
+
+parent.append(child);
+```
+
+### prepend
+
+> Inserts a set of `Node` objects or `DOMString` objects **before the first
+> child** of the `ParentNode`.
+
+```javascript
+parent.prepend(child);
+```
+
+### innerText
+
+```javascript
+div.innerText;
+// "bold"
+```
+
+```html
+<div><b>bold</b></div>
+```
+
+### innerHTML
+
+```javascript
+div.innerHTML;
+// "<b>bold</b>"
+```
+
+```html
+<div><b>bold</b></div>
+```
+
+### insertAdjacentHTML
+
+```javascript
+div.insertAdjacentHTML("beforeend", "<p>foo</p>");
+```
+
+```html
+<!-- beforebegin -->
+<div>
+  <!-- afterbegin -->
+  <!-- beforeend -->
+</div>
+<!-- afterend -->
+```
+
+### getAttribute
+
+```javascript
+input.getAttribute("type");
+// "email"
+
+input.getAttribute("foo");
+// null <- doesn't exists
+
+input.getAttribute("required");
+// "" <- is set
+
+input.toggleAttribute("required");
+
+input.setAttribute("type", "radio");
+```
+
+```html
+<input type="email" required />
+```
+
+### classList
+
+```javascript
+div.classList;
+// ["foo", "bar"]
+
+div.classList.add("qux");
+// ["foo", "bar", "qux"]
+
+div.classList.remove("qux");
+// ["foo", "bar"]
+
+div.classList.toggle("foo");
+// ["bar"]
+```
+
+```html
+<div class="foo bar"></div>
+```
+
+### style
+
+```javascript
+div.setAttribute("style", "color:red; padding:0.3rem;");
+
+div.style.color = "blue";
+```
