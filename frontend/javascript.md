@@ -2174,3 +2174,47 @@ div.setAttribute("style", "color:red; padding:0.3rem;");
 
 div.style.color = "blue";
 ```
+
+---
+
+## Storage
+
+### LocalStorage
+
+**Persists after closing the browser**
+
+```javascript
+// Persists till clearing the browser cache
+localStorage.setItem("foo", "bar");
+const result = localStorage.getItem("foo"); // bar
+
+localStorage.removeItem("foo"); // deletes foo
+localStorage.clear(); // clears everything
+```
+
+### Session Storage
+
+**Get cleared after closing the tab**
+
+```javascript
+// Gets cleared when closing the tab
+sessionStorage.setItem("foo", "bar");
+const result = sessionStorage.getItem("foo"); // bar
+```
+
+### Cookie
+
+```javascript
+document.cookie = "foo=bar";
+document.cookie = "qux=baz";
+
+console.log(document.cookie);
+// "foo=bar; qux=baz"
+
+// expires in 10s
+document.cookie = "foo=bar; max-age=10";
+```
+
+### IndexedDB
+
+[localForage](https://localforage.github.io/localForage/)
