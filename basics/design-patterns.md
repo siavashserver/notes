@@ -1525,3 +1525,205 @@ class ConcreteVisitor : IVisitor {
 | **Visitor**                 | Add new behavior to existing classes   | `IVisitor.Visit(ElementA)`                 | Open for operations | Breaks if structure changes      | OCP           | OCP: Add operations without changing data structure                                                                      |
 
 ---
+
+## MVC (Model–View–Controller)
+
+Separates application into three layers:
+
+- **Model** – business data & rules
+- **View** – UI (presentation)
+- **Controller** – handles requests, maps them to model updates and view
+  rendering
+
+```csharp
+public class ProductController : Controller
+{
+    private readonly IProductService _service;
+    public ProductController(IProductService service)
+    {
+        _service = service;
+    }
+
+    public IActionResult Details(int id)
+    {
+        var product = _service.GetById(id);
+        return View(product);
+    }
+}
+```
+
+### ✅ Advantages
+
+- Clear separation of concerns
+- Testable
+- Supports multiple views for same model
+
+### ❌ Disadvantages
+
+- Can become bloated (especially controllers)
+- Not always a perfect fit for APIs
+
+### Use Cases
+
+- ASP.NET MVC websites
+- Applications where UI and business logic separation is critical
+
+---
+
+## Repository Pattern
+
+Abstracts data access, so business logic doesn’t know if data comes from SQL,
+NoSQL, or an API.
+
+```csharp
+public interface IProductRepository
+{
+    Product GetById(int id);
+    void Add(Product product);
+}
+
+public class ProductRepository : IProductRepository
+{
+    private readonly DbContext _context;
+    public ProductRepository(DbContext context) => _context = context;
+
+    public Product GetById(int id) => _context.Products.Find(id);
+    public void Add(Product product) => _context.Products.Add(product);
+}
+```
+
+### ✅ Advantages
+
+- Decouples persistence logic
+- Easier testing (mocking)
+
+### ❌ Disadvantages
+
+- Can become redundant with modern ORMs like EF Core
+- Adds boilerplate
+
+### Use Cases
+
+- Complex domain logic where persistence might change
+- Test-driven development
+
+### Interview Questions
+
+- **Is Repository Pattern still necessary with EF Core?** Sometimes yes, if you
+  want to decouple domain logic from EF and make persistence swappable.
+
+---
+
+## Unit of Work
+
+Manages a single transaction for multiple repository operations.
+
+```csharp
+public interface IUnitOfWork : IDisposable
+{
+    IProductRepository Products { get; }
+    IOrderRepository Orders { get; }
+    int Complete();
+}
+
+public class UnitOfWork : IUnitOfWork
+{
+    private readonly DbContext _context;
+    public IProductRepository Products { get; }
+    public IOrderRepository Orders { get; }
+
+    public UnitOfWork(DbContext context, IProductRepository products, IOrderRepository orders)
+    {
+        _context = context;
+        Products = products;
+        Orders = orders;
+    }
+
+    public int Complete() => _context.SaveChanges();
+    public void Dispose() => _context.Dispose();
+}
+```
+
+### ✅ Advantages
+
+- Ensures atomic changes
+- Groups multiple repository calls under one transaction
+
+### ❌ Disadvantages
+
+- May be unnecessary if ORM already handles transactions
+
+### Use Cases
+
+- Multiple data modifications that must succeed/fail together
+
+### Interview Questions
+
+- **How EF Core’s `DbContext` already acts like a Unit of Work**?
+  `DbContext.SaveChanges()` acts as a UoW by applying all changes in a
+  transaction.
+
+---
+
+## CQRS (Command Query Responsibility Segregation)
+
+Separate read and write models:
+
+- **Command side:** Handles state changes
+- **Query side:** Optimized for reading
+
+```csharp
+// Command
+public record CreateOrderCommand(string ProductId, int Quantity);
+
+// Query
+public record GetOrdersByCustomerQuery(Guid CustomerId);
+```
+
+### ✅ Advantages
+
+- Optimizes performance (different read/write DBs possible)
+- Clear separation of concerns
+
+### ❌ Disadvantages
+
+- More complexity
+- Potential eventual consistency issues
+
+### Use Cases
+
+- High-performance applications
+- Event sourcing architectures
+
+### Interview Questions
+
+- **When is CQRS overkill?** For simple CRUD apps, it adds unnecessary
+  complexity.
+
+---
+
+## Event Sourcing
+
+Instead of storing only the latest state, store all events that led to it. State
+is reconstructed by replaying events.
+
+### ✅ Advantages
+
+- Perfect audit trail
+- Can rebuild state at any time
+- Enables temporal queries (“what was state last month?”)
+
+### ❌ Disadvantages
+
+- Complex to implement
+- Requires event versioning & snapshots for performance
+
+### Use Cases
+
+- Financial systems (auditability)
+- Distributed event-driven systems
+
+### Interview Questions
+
+- **How do you handle schema changes in Event Sourcing?** Use upcasting (event
+  versioning) or projections.
