@@ -513,3 +513,399 @@ clone later.
   clone.
 
 ---
+
+## Structural Patterns
+
+Structural design patterns tackle class and object composition: they help
+organize components and interfaces in ways that improve **modularity,
+flexibility, and maintainability**.
+
+| Pattern   | Purpose                               | Pros                                     | Cons                                     | Typical Use-Case                  |
+| --------- | ------------------------------------- | ---------------------------------------- | ---------------------------------------- | --------------------------------- |
+| Adapter   | Match two incompatible interfaces     | Allows reuse, no changes to legacy code  | Extra layer of abstraction               | Legacy API integration            |
+| Bridge    | Separate abstraction & implementation | Supports independent extension (SRP/OCP) | More classes, adds complexity            | Cross-platform UI or backend      |
+| Composite | Treat parts and wholes uniformly      | Simplifies hierarchical object handling  | Hard to unify divergent leaf types       | File systems, UI trees            |
+| Decorator | Dynamically add behavior              | Flexible runtime composition             | Many small classes, complex chains       | Logging, formatting, decoration   |
+| Facade    | Simplify complex subsystems           | Clear and simple API for clients         | May become too central, duplicated logic | Wrapping subsystems or libraries  |
+| Flyweight | Share common window of data           | Huge memory savings                      | Complexity in sharing and state mgmt     | High-volume identical objects     |
+| Proxy     | Control access, lazy load, protection | Access control, efficient object usage   | Can duplicate target interface logic     | Remote services, caches, security |
+
+### Adapter Pattern
+
+Enable incompatible interfaces to work together by wrapping one class into
+another expected interface.
+
+```csharp
+public interface IBird { void Quack(); }
+
+public class Duck : IBird { public void Quack() => Console.WriteLine("Quack!"); }
+
+public class Turkey { public void Gobble() => Console.WriteLine("Gobble!"); }
+
+public class TurkeyAdapter : IBird {
+    private readonly Turkey _turkey;
+    public TurkeyAdapter(Turkey turkey) => _turkey = turkey;
+    public void Quack() => _turkey.Gobble();
+}
+```
+
+#### ✅ Advantages
+
+- Decouples client code from legacy or third‑party APIs.
+- Allows reuse without modifying existing classes.
+
+#### ❌ Disadvantages
+
+- Adds an extra layer of abstraction.
+- May become cluttered if many adaptations are needed.
+
+#### Use Cases
+
+- Interfacing new code with legacy components or third‑party APIs.
+
+#### Interview Questions
+
+- **When should you choose Adapter over Facade?** Use Adapter when you need an
+  object to satisfy a specific interface; Facade provides a simplified overall
+  interface to a subsystem.
+
+### Bridge Pattern
+
+Decouple an abstraction from its implementation so both can evolve
+independently.
+
+```csharp
+// Abstraction
+public abstract class Remote {
+  protected IDevice _device;
+  protected Remote(IDevice device)=> _device = device;
+  public abstract void TogglePower();
+}
+
+// Implementations
+public interface IDevice { bool IsEnabled(); void Enable(); void Disable(); }
+public class TvDevice : IDevice { /*...*/ }
+
+// Extensions
+public class BasicRemote : Remote {
+  public BasicRemote(IDevice dev): base(dev){}
+  public override void TogglePower(){
+    _device.IsEnabled() ? _device.Disable() : _device.Enable();
+  }
+}
+```
+
+#### ✅ Advantages
+
+- Supports independent variation and extensibility.
+- Follows SRP and OCP cleanly.
+
+#### ❌ Disadvantages
+
+- More classes and interfaces to manage.
+- Can feel heavyweight if unnecessary.
+
+#### Use Cases
+
+- When both abstraction and implementation layers need separate evolution, e.g.
+  GUI toolkit vs OS.
+
+#### Interview Questions
+
+- **What problem does Bridge solve?** It prevents combinatorial explosion when
+  both abstraction and implementation can vary (e.g. platform and UI type).
+
+### Composite Pattern
+
+Treat individual and composed objects uniformly using a recursive tree
+structure.
+
+```csharp
+public interface IGraphic { void Draw(); }
+
+public class Circle : IGraphic { public void Draw() => Console.WriteLine("Circle"); }
+
+public class CompositeGraphic : IGraphic {
+  private readonly List<IGraphic> _items = new();
+  public void Add(IGraphic g) => _items.Add(g);
+  public void Draw() { foreach(var g in _items) g.Draw(); }
+}
+```
+
+#### ✅ Advantages
+
+- Simplifies handling of part–whole hierarchies.
+- Uniform interface for leaves and composites.
+
+#### ❌ Disadvantages
+
+- Difficult to design a common interface when leaf and composite differ greatly.
+- May permit misuse or overly general APIs.
+
+#### Use Cases
+
+- Graphic editors, file systems, UI hierarchy, document structure.
+
+#### Interview Questions
+
+- **How does Composite help with client code?** Client code can treat leaves and
+  aggregations the same, without type checks.
+
+### Decorator Pattern
+
+Add responsibilities to objects dynamically by wrapping them without
+subclassing.
+
+```csharp
+public interface IComponent { void Operation(); }
+
+public class ConcreteComponent : IComponent {
+  public void Operation() => Console.WriteLine("Core Operation");
+}
+
+public abstract class Decorator : IComponent {
+  protected IComponent _component;
+  protected Decorator(IComponent c) => _component = c;
+  public virtual void Operation() => _component.Operation();
+}
+
+public class DecoratorA : Decorator {
+  public DecoratorA(IComponent c): base(c){}
+  public override void Operation() { Console.WriteLine("Before"); base.Operation(); }
+}
+```
+
+#### ✅ Advantages
+
+- Extends behavior flexibly at runtime.
+- Composable “slices” of behavior.
+
+#### ❌ Disadvantages
+
+- Many small decorator classes can clutter the design.
+- Hard to trace through layers of wrapping.
+
+#### Use Cases
+
+- Logging, UI embellishments, runtime feature toggles.
+
+#### Interview Questions
+
+- **When to use Decorator vs inheritance?** Use Decorator when you want dynamic
+  and combinable behavior additions rather than static subclassing.
+
+### Facade Pattern
+
+Provide a unified, simple interface to a complex subsystem.
+
+```csharp
+public class Sub1 { public void Op1() => Console.WriteLine("Sub1 ready"); }
+
+public class Sub2 { public void Op2() => Console.WriteLine("Sub2 go"); }
+
+public class Facade {
+  private readonly Sub1 _s1; private readonly Sub2 _s2;
+  public Facade(Sub1 s1, Sub2 s2){ _s1=s1; _s2=s2;}
+  public void Operation() {
+    _s1.Op1(); _s2.Op2(); Console.WriteLine("Facade complete");
+  }
+}
+```
+
+#### ✅ Advantages
+
+- Simplifies client interaction.
+- Reduces dependencies on subsystem internals.
+
+#### ❌ Disadvantages
+
+- Can become a monolithic god-class if poorly designed.
+- Masks subsystem flexibility if not carefully planned.
+
+#### Use Cases
+
+- Simplifying access to complex libraries or legacy subsystems, or exposing a
+  clean API boundary.
+
+#### Interview Questions
+
+- **When would you avoid Facade?** When client needs fine‑grained control or
+  needs to access many subsystem APIs; a facade may obscure too much.
+
+Absolutely! Let's dive into the **Flyweight** and **Proxy** structural patterns
+with detailed explanations, real-world use cases, sample C# code, pros & cons,
+and interview-oriented Q\&A.
+
+### Flyweight Pattern
+
+Minimize memory usage by sharing as much data as possible between many objects.
+It's ideal when you have **lots of similar objects**.
+
+```csharp
+// Shared data: shape, texture, etc.
+public class TreeType
+{
+    public string Name;
+    public string Color;
+    public string Texture;
+
+    public TreeType(string name, string color, string texture)
+    {
+        Name = name; Color = color; Texture = texture;
+    }
+
+    public void Draw(int x, int y)
+    {
+        Console.WriteLine($"Drawing {Name} tree at ({x},{y}) with {Texture}");
+    }
+}
+
+// Factory to manage flyweights
+public class TreeFactory
+{
+    private static Dictionary<string, TreeType> _types = new();
+
+    public static TreeType GetTreeType(string name, string color, string texture)
+    {
+        string key = $"{name}_{color}_{texture}";
+        if (!_types.ContainsKey(key))
+            _types[key] = new TreeType(name, color, texture);
+        return _types[key];
+    }
+}
+
+// Context object (extrinsic state)
+public class Tree
+{
+    private int _x, _y;
+    private TreeType _type;
+
+    public Tree(int x, int y, TreeType type)
+    {
+        _x = x; _y = y; _type = type;
+    }
+
+    public void Draw() => _type.Draw(_x, _y);
+}
+```
+
+#### ✅ Advantages
+
+- Huge memory savings when dealing with many similar objects.
+- Can improve performance in rendering, simulations, caching.
+
+#### ❌ Disadvantages
+
+- Makes code more complex (you must manage extrinsic/intrinsic split).
+- Not useful if object data is too unique.
+
+#### Use Cases
+
+- Large-scale UI elements (buttons, icons).
+- Document editors (glyphs/characters).
+- Game objects (bullets, trees, tiles).
+- Font/character rendering.
+
+#### Interview Questions
+
+- **What problem does the Flyweight pattern solve?** It minimizes memory by
+  sharing common state (intrinsic) between many objects and separating
+  per-instance state (extrinsic).
+
+- **How do you identify extrinsic vs intrinsic state?** Intrinsic is shared and
+  immutable (e.g., texture, shape). Extrinsic is unique per object and passed
+  externally (e.g., position).
+
+### Proxy Pattern
+
+Provide a placeholder or surrogate for another object to **control access**, add
+**functionality**, or **delay** object creation. Proxy is a structural pattern
+that lets you substitute a real object with a special placeholder that controls
+access to it.
+
+- **Key Variants:**
+  - **Virtual Proxy**: lazy initialization
+  - **Remote Proxy**: access object on another machine
+  - **Protection Proxy**: restrict access (permissions)
+  - **Logging/Smart Proxy**: add extra behavior like caching, audit
+
+```csharp
+// Real subject
+public interface IImage
+{
+    void Display();
+}
+
+public class RealImage : IImage
+{
+    private string _filename;
+    public RealImage(string filename)
+    {
+        _filename = filename;
+        LoadFromDisk();
+    }
+
+    private void LoadFromDisk()
+    {
+        Console.WriteLine($"Loading {_filename} from disk...");
+    }
+
+    public void Display()
+    {
+        Console.WriteLine($"Displaying {_filename}");
+    }
+}
+
+// Proxy
+public class ImageProxy : IImage
+{
+    private RealImage _realImage;
+    private string _filename;
+
+    public ImageProxy(string filename)
+    {
+        _filename = filename;
+    }
+
+    public void Display()
+    {
+        if (_realImage == null)
+            _realImage = new RealImage(_filename);
+        _realImage.Display();
+    }
+}
+```
+
+#### ✅ Advantages
+
+- Control access to expensive or sensitive resources.
+- Adds functionality like lazy loading, logging, caching.
+- Remote invocation over network (e.g., gRPC stub, WCF proxy).
+
+#### ❌ Disadvantages
+
+- Adds complexity.
+- Can hide the actual behavior or cause unexpected side effects if not
+  transparent.
+
+#### Use Cases
+
+- Lazy loading large objects (e.g., images, files).
+- Database connection or object-relational mappers.
+- Authorization checks (security proxy).
+- API rate limiting or logging wrapper.
+
+#### Interview Questions
+
+- **When would you use Proxy instead of Decorator?** Decorator _adds behavior_
+  to objects. Proxy _controls access_ to the original object—e.g., lazy loading,
+  security, or remote access.
+
+- **How does a proxy differ from a facade?** Proxy acts on behalf of a specific
+  object, forwarding requests. Facade provides a new interface to a whole
+  subsystem.
+
+- **What is a virtual proxy?** A proxy that defers the creation of a heavy
+  object until it is actually needed.
+
+---
