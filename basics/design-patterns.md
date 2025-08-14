@@ -909,3 +909,619 @@ public class ImageProxy : IImage
   object until it is actually needed.
 
 ---
+
+## Behavioral Patterns
+
+Behavioral patterns deal with **how objects interact and share responsibility**,
+aiming to make communication flexible and loosely coupled.
+
+| Pattern         | Use Case                    | Pros                    | Cons                       |
+| --------------- | --------------------------- | ----------------------- | -------------------------- |
+| Chain of Resp.  | Approval chains, middleware | Loose coupling          | May not handle requests    |
+| Command         | UI buttons, undo/redo       | Decoupling, undoable    | Many classes               |
+| Interpreter     | DSLs, calculators           | Easy to add grammar     | Hard to scale              |
+| Iterator        | Collections                 | Encapsulation           | Performance on big sets    |
+| Mediator        | UI coordination, chat       | Simplifies interactions | Can grow complex           |
+| Memento         | Undo/redo                   | Preserves encapsulation | Memory overhead            |
+| State           | UI states, workflows        | Cleaner state handling  | Many state classes         |
+| Strategy        | Algorithms, payment, sort   | Swap at runtime         | Strategy selection logic   |
+| Observer        | Event systems, pub/sub      | Dynamic updates         | Memory leaks               |
+| Template Method | Processing pipelines        | Code reuse              | Inflexibility              |
+| Visitor         | AST traversal, reporting    | Adds behavior easily    | Breaks on structure change |
+
+### Observer Pattern
+
+Define a one-to-many dependency so that when one object changes its state, its
+dependents are notified automatically and updated.
+
+```csharp
+public interface IObserver { void Update(string message); }
+
+public class Subject {
+    private readonly List<IObserver> observers = new();
+    public void Attach(IObserver o) => observers.Add(o);
+    public void Detach(IObserver o) => observers.Remove(o);
+    public void Notify(string msg) { foreach(var o in observers) o.Update(msg); }
+}
+
+public class ConcreteObserver : IObserver {
+    private readonly string name;
+    public ConcreteObserver(string n) => name = n;
+    public void Update(string message) => Console.WriteLine($"{name} received: {message}");
+}
+```
+
+#### ✅ Advantages
+
+- Loose coupling: Subject doesn’t know concrete observers.
+- Dynamic subscription/unsubscription.
+
+#### ❌ Disadvantages
+
+- Requires careful lifecycle management (prevent memory leaks).
+- Ordering and concurrency can be tricky.
+
+#### Use Cases
+
+- GUI event listeners, publishing state changes (e.g., stock price updates).
+
+#### Interview Questions
+
+- **How does Observer maintain loose coupling?** Subject only knows observers
+  via interface, not concrete types.
+- **How to avoid memory leaks in Observer?** Observers should detach themselves
+  or use weak references.
+
+### Strategy Pattern
+
+Define a family of interchangeable algorithms or behaviors and select one at
+runtime.
+
+```csharp
+public interface ICompressionStrategy { void Compress(string file); }
+
+public class ZipCompression : ICompressionStrategy {
+    public void Compress(string file) => Console.WriteLine($"Compressing {file} as .zip");
+}
+
+public class RarCompression : ICompressionStrategy {
+    public void Compress(string file) => Console.WriteLine($"Compressing {file} as .rar");
+}
+
+public class CompressionContext {
+    private ICompressionStrategy strategy;
+    public void SetStrategy(ICompressionStrategy strat) => strategy = strat;
+    public void Archive(string file) => strategy.Compress(file);
+}
+```
+
+#### ✅ Advantages
+
+- Swap behavior dynamically.
+- Supports open/closed principle — new strategies without modifying context.
+
+#### ❌ Disadvantages
+
+- Increases number of strategy classes.
+- Strategy selection logic must be maintained externally.
+
+#### Use Cases
+
+- Payment methods, serialization options, sorting algorithms.
+
+#### Interview Questions
+
+- **When to use Strategy vs. State?** Strategy encapsulates interchangeable
+  algorithms; State encapsulates state-based behavior.
+- **Why composition over inheritance here?** It allows runtime flexibility and
+  reduces subclass explosion.
+
+### Template Method Pattern
+
+Define the skeleton of an algorithm in a base class, deferring some steps to
+subclasses.
+
+```csharp
+public abstract class DataProcessor {
+    public void Process() {
+        Read();
+        ProcessCore();
+        Save();
+    }
+    protected abstract void Read();
+    protected abstract void ProcessCore();
+    protected abstract void Save();
+}
+
+public class XmlProcessor : DataProcessor {
+    protected override void Read() => Console.WriteLine("Read XML");
+    protected override void ProcessCore() => Console.WriteLine("Process XML");
+    protected override void Save() => Console.WriteLine("Save XML");
+}
+
+public class JsonProcessor : DataProcessor {
+    protected override void Read() => Console.WriteLine("Read JSON");
+    protected override void ProcessCore() => Console.WriteLine("Process JSON");
+    protected override void Save() => Console.WriteLine("Save JSON");
+}
+```
+
+#### ✅ Advantages
+
+- Enforces algorithm structure and code reuse.
+- Reduces duplication across similar workflows.
+
+#### ❌ Disadvantages
+
+- Inflexible: algorithm order fixed in base class.
+- Adding new steps may require changing base class.
+
+#### Use Cases
+
+- File processing pipelines, report generation flows, setup procedures.
+
+#### Interview Questions
+
+- **What happens if XML requires an extra validation step?** You’d override or
+  extend in subclass—but base structure stays intact.
+- **How does Template support code reuse?** Common steps reside in the abstract
+  class; subclasses only implement variable steps.
+
+## Chain of Responsibility
+
+Pass a request along a chain of handlers. Each handler decides either to handle
+it or pass it to the next.
+
+```csharp
+abstract class Handler {
+    protected Handler next;
+    public void SetNext(Handler handler) => next = handler;
+    public abstract void Handle(string request);
+}
+
+class Manager : Handler {
+    public override void Handle(string request) {
+        if (request == "low") Console.WriteLine("Manager approved low-level request");
+        else next?.Handle(request);
+    }
+}
+
+class Director : Handler {
+    public override void Handle(string request) {
+        if (request == "medium") Console.WriteLine("Director approved medium-level request");
+        else next?.Handle(request);
+    }
+}
+```
+
+#### ✅ Advantages
+
+- Reduces coupling between sender and receiver.
+- Flexible and dynamic handler chain.
+
+#### ❌ Disadvantages
+
+- Can be hard to debug.
+- No guarantee that the request will be handled.
+
+#### Use Cases
+
+- Logging, approval workflows, middleware pipelines.
+
+#### Interview Questions
+
+- **What if no handler processes the request?** It may fail silently unless
+  explicitly handled.
+
+## Command
+
+Encapsulate a request as an object to allow undo, logging, and queuing.
+
+```csharp
+interface ICommand { void Execute(); }
+
+class LightOnCommand : ICommand {
+    public void Execute() => Console.WriteLine("Light turned ON");
+}
+
+class RemoteControl {
+    private ICommand command;
+    public void SetCommand(ICommand cmd) => command = cmd;
+    public void PressButton() => command.Execute();
+}
+```
+
+#### ✅ Advantages
+
+- Supports undo/redo.
+- Decouples sender from receiver.
+
+#### ❌ Disadvantages
+
+- Increases class count.
+
+#### Use Cases
+
+- UI actions, transaction management, undo stacks.
+
+#### Interview Questions
+
+- **How is Command used in a UI?** Button clicks trigger command objects.
+
+## Interpreter
+
+Defines a grammar and interpreter for a domain-specific language (DSL).
+
+```csharp
+interface IExpression { int Interpret(); }
+
+class Number : IExpression {
+    private int number;
+    public Number(int num) => number = num;
+    public int Interpret() => number;
+}
+
+class Add : IExpression {
+    private IExpression left, right;
+    public Add(IExpression l, IExpression r) { left = l; right = r; }
+    public int Interpret() => left.Interpret() + right.Interpret();
+}
+```
+
+#### ✅ Advantages
+
+- Great for small DSLs.
+- Easy to extend.
+
+#### ❌ Disadvantages
+
+- Inefficient for large grammars.
+- Hard to maintain as it grows.
+
+#### Use Cases
+
+- Expression evaluators, simple compilers, regex.
+
+#### Interview Questions
+
+- **When is Interpreter not appropriate?** For complex grammars—better use
+  parser generators.
+
+## Iterator
+
+Access elements of an aggregate object without exposing its representation.
+
+```csharp
+class NameRepository {
+    private string[] names = { "Alice", "Bob", "Charlie" };
+    public IEnumerator<string> GetEnumerator() {
+        foreach (var name in names) yield return name;
+    }
+}
+```
+
+#### ✅ Advantages
+
+- Hides internal structure.
+- Supports multiple traversals.
+
+#### ❌ Disadvantages
+
+- May complicate iteration for dynamic structures.
+
+#### Use Cases
+
+- Collections, tree traversal.
+
+#### Interview Questions
+
+- **How is IEnumerator different from IEnumerable?** `IEnumerator` moves over
+  data; `IEnumerable` returns enumerators.
+
+## Mediator
+
+Centralize complex communications between objects to promote loose coupling.
+
+```csharp
+// Mediator Interface
+public interface IMediator
+{
+    void SendMessage(string message, string from, string to);
+}
+
+// Concrete Mediator
+public class ModuleMediator : IMediator
+{
+    private Dictionary<string, IModule> _modules = new();
+
+    public void Register(string name, IModule module)
+    {
+        _modules[name] = module;
+    }
+
+    public void SendMessage(string message, string from, string to)
+    {
+        if (_modules.ContainsKey(to))
+        {
+            _modules[to].Receive(message, from);
+        }
+        else
+        {
+            Console.WriteLine($"[Mediator] Receiver '{to}' not found.");
+        }
+    }
+}
+
+// Colleague Interface
+public interface IModule
+{
+    void Receive(string message, string from);
+    void Send(string message, string to);
+}
+
+// Concrete Colleague
+public class UserModule : IModule
+{
+    private string _name;
+    private IMediator _mediator;
+
+    public UserModule(string name, IMediator mediator)
+    {
+        _name = name;
+        _mediator = mediator;
+    }
+
+    public void Receive(string message, string from)
+    {
+        Console.WriteLine($"{_name} received from {from}: {message}");
+    }
+
+    public void Send(string message, string to)
+    {
+        _mediator.SendMessage(message, _name, to);
+    }
+}
+
+// Demo
+class Program
+{
+    static void Main()
+    {
+        var mediator = new ModuleMediator();
+
+        var authModule = new UserModule("AuthService", mediator);
+        var orderModule = new UserModule("OrderService", mediator);
+        var notificationModule = new UserModule("NotificationService", mediator);
+
+        mediator.Register("AuthService", authModule);
+        mediator.Register("OrderService", orderModule);
+        mediator.Register("NotificationService", notificationModule);
+
+        authModule.Send("User authenticated successfully", "OrderService");
+        orderModule.Send("Order placed for user", "NotificationService");
+    }
+}
+```
+
+#### ✅ Advantages
+
+- Reduces coupling.
+- Simplifies object interaction.
+
+#### ❌ Disadvantages
+
+- Can become overly complex mediator.
+
+#### Use Cases
+
+- UI coordination, chat apps, Air Traffic Control.
+
+#### Interview Questions
+
+- **How is Mediator different from Observer?** Mediator coordinates multiple
+  components; Observer broadcasts to subscribers.
+
+## Memento
+
+Capture an object’s state so it can be restored later.
+
+```csharp
+class Editor {
+    public string Content { get; set; }
+    public Memento Save() => new Memento(Content);
+    public void Restore(Memento m) => Content = m.Content;
+}
+
+class Memento {
+    public string Content { get; }
+    public Memento(string content) => Content = content;
+}
+```
+
+#### ✅ Advantages
+
+- Preserves encapsulation.
+- Supports undo.
+
+#### ❌ Disadvantages
+
+- Can be memory-heavy.
+
+#### Use Cases
+
+- Undo/redo, backup systems.
+
+#### Interview Questions
+
+- **How is Memento different from Prototype?** Memento is for restoring past
+  state; Prototype is for cloning.
+
+## State
+
+Allow an object to alter its behavior when its internal state changes.
+
+```csharp
+// State Interface
+public interface IOrderState
+{
+    void Handle(OrderContext context);
+}
+
+// Concrete States
+public class NewOrderState : IOrderState
+{
+    public void Handle(OrderContext context)
+    {
+        Console.WriteLine("Order is new. Moving to processing...");
+        context.SetState(new ProcessingState());
+    }
+}
+
+public class ProcessingState : IOrderState
+{
+    public void Handle(OrderContext context)
+    {
+        Console.WriteLine("Order is processing. Moving to shipped...");
+        context.SetState(new ShippedState());
+    }
+}
+
+public class ShippedState : IOrderState
+{
+    public void Handle(OrderContext context)
+    {
+        Console.WriteLine("Order shipped. Process complete.");
+    }
+}
+
+// Context
+public class OrderContext
+{
+    private IOrderState _state;
+
+    public OrderContext(IOrderState state)
+    {
+        _state = state;
+    }
+
+    public void SetState(IOrderState state)
+    {
+        _state = state;
+    }
+
+    public void Process()
+    {
+        _state.Handle(this);
+    }
+}
+
+// Demo
+class Program
+{
+    static void Main()
+    {
+        var order = new OrderContext(new NewOrderState());
+        order.Process();
+        order.Process();
+        order.Process();
+    }
+}
+```
+
+#### ✅ Advantages
+
+- Eliminates conditional logic.
+- Encapsulates state-specific behavior.
+
+#### ❌ Disadvantages
+
+- Increases class count.
+
+#### Use Cases
+
+- UI controls, game states, workflow engines.
+
+#### Interview Questions
+
+- **When to use State vs. Strategy?** State depends on context; Strategy is
+  chosen externally.
+
+## Visitor
+
+Separate algorithms from object structures, adding operations without modifying
+the objects.
+
+```csharp
+interface IVisitor { void Visit(ElementA a); void Visit(ElementB b); }
+interface IElement { void Accept(IVisitor visitor); }
+
+class ElementA : IElement {
+    public void Accept(IVisitor visitor) => visitor.Visit(this);
+}
+
+class ConcreteVisitor : IVisitor {
+    public void Visit(ElementA a) => Console.WriteLine("Visited A");
+    public void Visit(ElementB b) => Console.WriteLine("Visited B");
+}
+```
+
+#### ✅ Advantages
+
+- Add new operations without changing object structure.
+
+#### ❌ Disadvantages
+
+- Modifying element structure breaks visitors.
+
+#### Use Cases
+
+- AST traversal, compilers, reporting engines.
+
+#### Interview Questions
+
+- **What’s a drawback of Visitor?** A: Fragile to structural changes in the
+  elements.
+
+---
+
+## Gang of Four (GoF) Design Patterns Cheatsheet
+
+### Creational Patterns
+
+| Pattern              | Intent                                                                 | Example (C#)                                                   | Pros                            | Cons                        | Follows SOLID | Reason                                                                                                                                          |
+| -------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------- | --------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Singleton**        | Ensures a class has only one instance                                  | `static` class or `private constructor` with `static instance` | Controlled access, lazy loading | Global state, hard to test  | SRP, OCP      | SRP: Manages single responsibility of controlling instance creation; OCP: With abstraction, new variations can be added without modifying usage |
+| **Factory Method**   | Define interface for object creation, let subclasses decide            | `IFactory` with `CreateProduct()`                              | Loose coupling                  | Proliferation of classes    | OCP, DIP      | OCP: Add new product types without modifying factory; DIP: Clients depend on abstractions, not concrete classes                                 |
+| **Abstract Factory** | Create families of related objects without specifying concrete classes | `IUIFactory` with `CreateButton()` & `CreateTextBox()`         | Enforces consistency            | Complex structure           | SRP, DIP      | SRP: Factory handles only creation logic; DIP: Depends on abstract factories instead of concrete implementations                                |
+| **Builder**          | Step-by-step construction of complex objects                           | `Builder pattern for Pizza/House`                              | Clear, flexible object creation | May require director class  | SRP           | SRP: Builder encapsulates construction steps, separate from product logic                                                                       |
+| **Prototype**        | Clone an object instead of creating                                    | `ICloneable`, `.Clone()` method                                | Reduces cost of creation        | Deep vs shallow copy issues | SRP, OCP      | SRP: Object cloning separated from main logic; OCP: New cloneable types added without modifying client code                                     |
+
+### Structural Patterns
+
+| Pattern       | Intent                                          | Example (C#)                                  | Pros                    | Cons                          | Follows SOLID | Reason                                                                                                                                        |
+| ------------- | ----------------------------------------------- | --------------------------------------------- | ----------------------- | ----------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Adapter**   | Convert interface of one class to another       | `IUsbDevice` adapter for `LegacySerialDevice` | Reuse legacy code       | Added layer                   | OCP, DIP      | OCP: Can add new adapters without altering clients; DIP: Clients depend on target abstraction, not legacy types                               |
+| **Bridge**    | Separate abstraction from implementation        | `RemoteControl` & `TV`                        | Independent variation   | Complex hierarchy             | SRP, OCP, DIP | SRP: Separates abstraction and implementation; OCP: Change abstraction or implementation independently; DIP: Abstraction depends on interface |
+| **Composite** | Treat individual and group of objects uniformly | `Graphic`, `Circle`, `Group : Graphic`        | Hierarchical structures | Hard to restrict tree depth   | SRP, OCP      | SRP: Composite manages children, leaf handles logic; OCP: Add new components without changing structure                                       |
+| **Decorator** | Add responsibilities dynamically                | `Stream`, `BufferedStream`, `EncryptedStream` | No subclass explosion   | Many small classes            | OCP, SRP      | SRP: Each class adds one responsibility; OCP: Add new behavior without modifying base class                                                   |
+| **Facade**    | Provide simplified interface to a system        | `CompilerFacade.Compile()`                    | Simplifies use          | Hides power of subsystem      | SRP, OCP      | SRP: Facade is only responsible for coordination; OCP: Subsystems can change without affecting facade users                                   |
+| **Flyweight** | Reduce object count via sharing                 | `CharacterFactory` in text rendering          | Saves memory            | Complexity with mutable state | SRP           | SRP: Separates shared and unique state                                                                                                        |
+| **Proxy**     | Control access to real object                   | `VirtualProxy`, `SecurityProxy`               | Lazy loading, control   | Adds indirection              | SRP, OCP      | SRP: Proxy handles access control; OCP: Can add proxies without modifying subject or client                                                   |
+
+### Behavioral Patterns
+
+| Pattern                     | Intent                                 | Example (C#)                               | Pros                | Cons                             | Follows SOLID | Reason                                                                                                                   |
+| --------------------------- | -------------------------------------- | ------------------------------------------ | ------------------- | -------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **Chain of Responsibility** | Pass request along handlers            | `Logger -> EmailNotifier -> SMSNotifier`   | Flexible, decoupled | Unhandled requests               | SRP, OCP      | SRP: Each handler has one job; OCP: Add new handlers without changing the chain                                          |
+| **Command**                 | Encapsulate request as an object       | `ICommand`, `LightOnCommand`, `Invoker`    | Undo/redo support   | Class explosion                  | SRP, OCP      | SRP: Encapsulates action separately from invoker; OCP: New commands don’t affect invoker                                 |
+| **Interpreter**             | Define grammar for language            | Expression trees for math parsing          | Easy to extend      | Hard to scale                    | SRP           | SRP: Each class represents one grammar rule/responsibility                                                               |
+| **Iterator**                | Sequential access to collection        | `IEnumerator`, `foreach`                   | Hides structure     | Inefficient in large sets        | SRP           | SRP: Iterator class only handles traversal                                                                               |
+| **Mediator**                | Centralize communication               | `DialogMediator`, `Button`, `TextBox`      | Reduces coupling    | Mediator grows complex           | SRP, OCP      | SRP: Mediator handles interactions only; OCP: Add new components without changing others                                 |
+| **Memento**                 | Capture and restore object state       | `Editor.Save()`, `Restore()`               | Supports undo       | Memory overhead                  | SRP           | SRP: State saving is separated from business logic                                                                       |
+| **Observer**                | One-to-many notification               | `IObservable`/`IObserver`, event system    | Loose coupling      | Memory leaks if not unsubscribed | SRP, OCP      | SRP: Observer handles notification only; OCP: Add new observers without changing subject                                 |
+| **State**                   | Change behavior by state               | `OnState`, `OffState`, `Context`           | Avoids if-else      | State explosion                  | SRP, OCP      | SRP: State logic in separate classes; OCP: Add states without changing context                                           |
+| **Strategy**                | Encapsulate interchangeable algorithms | `ISortStrategy`, `QuickSort`, `BubbleSort` | Runtime flexibility | Requires interface setup         | SRP, OCP, DIP | SRP: Each strategy class has one algorithm; OCP: Add new strategies easily; DIP: Context depends on strategy abstraction |
+| **Template Method**         | Define skeleton with variable steps    | `AbstractClass`, `DoStep1()`, `DoStep2()`  | Code reuse          | Inflexibility                    | SRP, OCP      | SRP: Common logic centralized; OCP: Override steps without modifying base                                                |
+| **Visitor**                 | Add new behavior to existing classes   | `IVisitor.Visit(ElementA)`                 | Open for operations | Breaks if structure changes      | OCP           | OCP: Add operations without changing data structure                                                                      |
+
+---
