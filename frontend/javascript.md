@@ -305,6 +305,152 @@ self.onmessage = function (event) {
 
 ---
 
+## Promises & Async/Await
+
+### What is a Promise?
+
+A **Promise** is an object representing the eventual completion (or failure) of
+an asynchronous operation.
+
+- **States**:
+
+  1. `pending` → Initial state.
+  2. `fulfilled` → Operation completed successfully.
+  3. `rejected` → Operation failed.
+
+```javascript
+const promise = new Promise((resolve, reject) => {
+  setTimeout(() => resolve("Done!"), 1000);
+});
+
+promise.then((result) => console.log(result)); // "Done!" after 1s
+```
+
+#### Execution Model (Promises)
+
+1. **Creation**: Executor function runs immediately (synchronous start).
+2. **Resolution/Rejection**: Happens later, asynchronously.
+3. **Callbacks** in `.then()` and `.catch()` go into the **microtask queue** —
+   meaning they run **after** the current synchronous code but **before**
+   macrotasks like `setTimeout`.
+
+#### Common Promise Methods
+
+| Method                          | Description                               | Example                     |
+| ------------------------------- | ----------------------------------------- | --------------------------- |
+| `then(onFulfilled, onRejected)` | Runs when fulfilled or rejected           | `p.then(v => ...)`          |
+| `catch(onRejected)`             | Error handling                            | `p.catch(e => ...)`         |
+| `finally(onFinally)`            | Runs regardless of result                 | `p.finally(() => ...)`      |
+| `Promise.all([...])`            | All must succeed or reject                | `Promise.all([p1, p2])`     |
+| `Promise.allSettled([...])`     | Waits for all, regardless of success/fail | `Promise.allSettled([...])` |
+| `Promise.race([...])`           | Resolves/rejects with first to finish     | `Promise.race([...])`       |
+| `Promise.any([...])`            | Resolves with first success               | `Promise.any([...])`        |
+
+### Async/Await
+
+- **Syntactic sugar** for Promises.
+- Makes asynchronous code look synchronous.
+- An `async` function **always returns a Promise**.
+- `await` pauses execution **inside the async function** until the Promise
+  settles.
+
+```javascript
+async function getData() {
+  try {
+    const result = await fetch("https://api.example.com/data");
+    return await result.json();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+getData().then(console.log);
+```
+
+#### Execution Model (Async/Await)
+
+- `await` doesn’t block the entire program — it suspends the **current async
+  function** until the Promise resolves.
+- Behind the scenes, `await` is just `.then()` with extra handling for
+  `try/catch`.
+
+### Scenarios & Best Practices
+
+| Scenario                      | Promise         | Async/Await                |
+| ----------------------------- | --------------- | -------------------------- |
+| Multiple parallel async tasks | `Promise.all()` | `await Promise.all([...])` |
+| Sequential async steps        | Chain `.then()` | Use multiple `await`       |
+| Error handling                | `.catch()`      | `try/catch`                |
+| Clean syntax for long chains  | ❌ Verbose      | ✅ Cleaner                 |
+
+### Tricky Edge Cases
+
+#### Promise executor runs immediately
+
+```javascript
+const p = new Promise((resolve) => {
+  console.log("Executor runs immediately");
+  resolve(42);
+});
+p.then(console.log);
+```
+
+#### Async function always returns a Promise
+
+```javascript
+async function f() {
+  return 1;
+}
+f().then(console.log); // Logs 1, but as a Promise result
+```
+
+#### Microtasks vs Macrotasks
+
+```javascript
+setTimeout(() => console.log("Timeout"), 0);
+
+Promise.resolve()
+  .then(() => console.log("Promise 1"))
+  .then(() => console.log("Promise 2"));
+
+console.log("End");
+
+// Output order:
+// End
+// Promise 1
+// Promise 2
+// Timeout
+```
+
+### Interview Questions
+
+#### Why is `.then()` callback always async even if the Promise is already resolved?
+
+Promise callbacks go into the **microtask queue** to ensure a consistent
+execution order and avoid unexpected sync execution.
+
+#### How does `await` differ from `yield` in generators?
+
+`await` works only with Promises and automatically resumes execution when
+resolved, while `yield` is manual — requires an iterator to resume.
+
+#### What’s wrong with using `await` in a loop for multiple async operations?
+
+```javascript
+for (let url of urls) {
+  await fetch(url); // Sequential, slow
+}
+```
+
+This is sequential; better to use `Promise.all` for parallel execution.
+
+#### What happens if you forget `await`?
+
+You’ll get a Promise object instead of the resolved value — possibly leading to
+logic errors.
+
+---
+
 ## Data Fetching
 
 ### Fetch API (Modern)
