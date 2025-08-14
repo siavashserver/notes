@@ -27,7 +27,7 @@ The most common approach—inject services by declaring them in the constructor.
 - Angular uses TypeScript metadata to know what to pass based on the token type.
 - Works for components, services, directives, and more.
 
-```ts
+```typescript
 constructor(private authService: AuthService) {}
 ```
 
@@ -49,7 +49,7 @@ functions.
 - Supports injecting services without the constructor.
 - Ideal for base classes or mixins to avoid boilerplate in subclasses.
 
-```ts
+```typescript
 private userService = inject(UserService);
 ```
 
@@ -73,7 +73,7 @@ dynamically.
 - Used when injection needs to happen at runtime or lazily (e.g. in
   `APP_INITIALIZER`).
 
-```ts
+```typescript
 constructor(private injector: Injector) {
   this.configService = this.injector.get(ConfigService);
 }
@@ -95,7 +95,7 @@ Use a setter method to inject services after instantiation.
 
 - Useful for optional dependencies or dependencies that may change at runtime.
 
-```ts
+```typescript
 setService(dep: SomeService) {
   this.dep = dep;
 }
@@ -107,7 +107,7 @@ Define a method in an interface and implement it to receive dependencies.
 
 - Rarely used in Angular but aligns with SOLID OOP principles.
 
-```ts
+```typescript
 interface DepInjector {
   inject(dep: MyService): void;
 }
@@ -142,7 +142,7 @@ The default when you register a class for a token. Angular will instantiate
 `ConsoleLogger` whenever something requests `Logger`. Great for swapping
 implementations, no change required in consuming code.
 
-```ts
+```typescript
 providers: [{ provide: Logger, useClass: ConsoleLogger }];
 // or shorthand
 providers: [Logger];
@@ -153,7 +153,7 @@ providers: [Logger];
 Provides a static value, configuration object, or primitive. Inject with
 `@Inject(APP_CONFIG)` to read config data.
 
-```ts
+```typescript
 export const APP_CONFIG = new InjectionToken<AppConfig>("token_description");
 
 providers: [
@@ -166,7 +166,7 @@ providers: [
 Uses a factory function to create the dependency—especially useful when logic or
 runtime context is needed:
 
-```ts
+```typescript
 export function heroFactory(auth: AuthService) {
   return new HeroService(auth.isAdmin());
 }
@@ -186,7 +186,7 @@ Creates an alias so two tokens refer to the same instance—no new instance is
 created. Requests for `OldLogger` or `NewLogger` yield the same singleton
 instance.
 
-```ts
+```typescript
 providers: [NewLogger, { provide: OldLogger, useExisting: NewLogger }];
 ```
 
@@ -196,7 +196,7 @@ Allows multiple providers for the **same token**; Angular aggregates them into
 an array. Then inject `@Inject(LOGGER_PROVIDERS) private loggers: Logger[]` to
 get both implementations.
 
-```ts
+```typescript
 export const LOGGER_PROVIDERS = new InjectionToken<Logger[]>(
   "token_description"
 );
@@ -252,7 +252,7 @@ string.
 <p>{{ message }}</p>
 ```
 
-```ts
+```typescript
 export class MyComponent {
   message = "Hello, Angular!";
 }
@@ -264,7 +264,7 @@ export class MyComponent {
 <button [disabled]="isDisabled">Click me</button>
 ```
 
-```ts
+```typescript
 export class MyComponent {
   isDisabled = true;
 }
@@ -277,7 +277,7 @@ export class MyComponent {
 <p>{{ greeting }}</p>
 ```
 
-```ts
+```typescript
 export class MyComponent {
   greeting = "";
   sayHello() {
@@ -297,7 +297,7 @@ Allow component and view to sync data automatically. Sugar syntax combining
 <p>Your username is: {{ username }}</p>
 ```
 
-```ts
+```typescript
 export class MyComponent {
   username = "JohnDoe";
 }
@@ -311,7 +311,7 @@ Sets up `[count]` and `(countChange)` bindings behind the scenes.
 <app-counter [(count)]="initialCount"></app-counter>
 ```
 
-```ts
+```typescript
 // Parent
 initialCount = 10;
 
@@ -378,7 +378,7 @@ These directives adjust styling or behavior without changing structure:
 
 Use when you want to modify an element's behavior or appearance.
 
-```ts
+```typescript
 @Directive({ selector: "[appHighlight]" })
 export class HighlightDirective implements OnInit {
   @Input() appHighlight = "";
@@ -399,7 +399,7 @@ export class HighlightDirective implements OnInit {
 
 #### Structural Directive
 
-```ts
+```typescript
 @Directive({ selector: "[appShowIf]" })
 export class ShowIfDirective {
   private hasView = false;
@@ -470,7 +470,7 @@ slice:0:3 }}` \* **JsonPipe** – Debug by serializing objects: `{{ obj | json }
 
 #### Pure Pipe `capitalize`
 
-```ts
+```typescript
 import { Pipe, PipeTransform } from "@angular/core";
 
 @Pipe({ name: "capitalize" /* pure by default */ })
@@ -482,13 +482,13 @@ export class CapitalizePipe implements PipeTransform {
 }
 ```
 
-```ts
+```typescript
 <p>{{ user.name | capitalize }}</p>
 ```
 
 #### Impure Pipe `impureFilter`
 
-```ts
+```typescript
 import { Pipe, PipeTransform } from "@angular/core";
 
 @Pipe({ name: "impureFilter", pure: false })
@@ -820,7 +820,7 @@ like loading configuration, fetching user settings, or initializing services.
 - Use `multi: true` to support multiple initializers.
 - Use cases: Feature toggles, i18n settings, auth token initialization.
 
-```ts
+```typescript
 @Injectable({ providedIn: "root" })
 class AppConfigService {
   config: any;
@@ -860,7 +860,7 @@ Common scenarios:
 - Mapping error format responses
 - Retrying/transformation or caching logic
 
-```ts
+```typescript
 @Injectable()
 export class HttpAuthErrorInterceptor implements HttpInterceptor {
   intercept(
@@ -887,7 +887,7 @@ export class HttpAuthErrorInterceptor implements HttpInterceptor {
 }
 ```
 
-```ts
+```typescript
 providers: [
   {
     provide: HTTP_INTERCEPTORS,
@@ -905,7 +905,7 @@ Angular's `ErrorHandler` captures uncaught exceptions anywhere in the app
 (lifecycle hooks, event handlers, template expressions). Combined with
 interceptors, you can unify error handling.
 
-```ts
+```typescript
 @Injectable({ providedIn: "root" })
 export class GlobalErrorHandler implements ErrorHandler {
   constructor(private logger: ErrorLoggerService, private injector: Injector) {}
@@ -921,7 +921,7 @@ export class GlobalErrorHandler implements ErrorHandler {
 }
 ```
 
-```ts
+```typescript
 { provide: ErrorHandler, useClass: GlobalErrorHandler }
 ```
 
@@ -972,7 +972,7 @@ a paradigm shift away from module-heavy architectures.
 
 #### Declaring a Standalone Component
 
-```ts
+```typescript
 import { Component } from "@angular/core";
 import { CommonModule } from "@angular/common";
 
@@ -989,7 +989,7 @@ No `NgModule` required — this component can be imported directly where needed.
 
 #### Using a Standalone Component
 
-```ts
+```typescript
 @Component({
   selector: "app-parent",
   standalone: true,
@@ -1024,7 +1024,7 @@ component — no module needed.
 Angular's `RouterModule` enables navigation within a Single Page Application
 without full page reloads. You define routes that match URL paths to components:
 
-```ts
+```typescript
 const routes: Routes = [
   { path: "", component: HomeComponent, pathMatch: "full" },
   { path: "dashboard", component: DashboardComponent },
@@ -1056,7 +1056,7 @@ Prevents unauthorized navigation into a route. Should return a boolean,
 
 #### Class-based
 
-```ts
+```typescript
 @Injectable({ providedIn: "root" })
 export class AuthGuard implements CanActivate {
   constructor(private auth: AuthService, private router: Router) {}
@@ -1068,13 +1068,13 @@ export class AuthGuard implements CanActivate {
 
 Apply it:
 
-```ts
+```typescript
 { path: 'dashboard', component: DashboardComponent, canActivate: [AuthGuard] }
 ```
 
 #### Functional guard (Angular 16+)
 
-```ts
+```typescript
 export const authGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
   const router = inject(Router);
@@ -1092,7 +1092,7 @@ export const authGuard: CanActivateFn = () => {
 
 Runs only for child routes. Good for protecting a set of nested routes:
 
-```ts
+```typescript
 { path: 'admin', canActivateChild: [adminGuard], children: [
    { path: 'users', component: UserListComponent },
    { path: 'settings', component: SettingsComponent }
@@ -1107,7 +1107,7 @@ Runs only for child routes. Good for protecting a set of nested routes:
 Prevents a user from leaving a route—useful for unsaved changes or cleanup
 prompts.
 
-```ts
+```typescript
 export interface CanComponentDeactivate {
   canDeactivate(): boolean | Observable<boolean>;
 }
@@ -1119,13 +1119,13 @@ export const unsavedGuard: CanDeactivateFn<CanComponentDeactivate> = (
 
 On routes:
 
-```ts
+```typescript
 { path: 'editor', component: EditorComponent, canDeactivate: [unsavedGuard] }
 ```
 
 Editors can implement:
 
-```ts
+```typescript
 canDeactivate(): boolean {
   return this.form.dirty
     ? confirm('Unsaved changes, leave?')
@@ -1142,7 +1142,7 @@ Reusable approaches delegate logic via a common interface.
 - `CanMatch` replaces it in Angular 14+: it prevents route matching and
   therefore lazy chunk loading entirely.
 
-```ts
+```typescript
 export const featureFlagGuard: CanMatchFn = (route, segments) => {
   const fs = inject(FeatureService);
   return fs.isEnabled('betaFeature');
@@ -1158,7 +1158,7 @@ This prevents large chunks from downloading unless allowed.
 Fetches data before navigation completes; ensures components have pre-fetched
 data available. Often used to avoid blank intermediate states.
 
-```ts
+```typescript
 @Injectable({providedIn: 'root'})
 export class ItemResolver implements Resolve<Item> {
   constructor(private svc: ItemService) {}
@@ -1254,7 +1254,7 @@ Angular provides the following strategies via the `RouterModule.forRoot()` call.
 - **Nothing is preloaded.**
 - Lazy-loaded modules are loaded only when needed.
 
-```ts
+```typescript
 RouterModule.forRoot(routes, { preloadingStrategy: NoPreloading });
 ```
 
@@ -1264,7 +1264,7 @@ RouterModule.forRoot(routes, { preloadingStrategy: NoPreloading });
   stable.
 - Useful for apps with good bandwidth and not many lazy-loaded modules.
 
-```ts
+```typescript
 // app-routing.module.ts
 import { NgModule } from "@angular/core";
 import { Routes, RouterModule, PreloadAllModules } from "@angular/router";
@@ -1299,7 +1299,7 @@ export class AppRoutingModule {}
 You can define a custom class that implements `PreloadingStrategy` to
 selectively preload modules.
 
-```ts
+```typescript
 import { PreloadingStrategy, Route } from "@angular/router";
 import { Observable, of } from "rxjs";
 
@@ -1312,7 +1312,7 @@ export class CustomPreloadingStrategy implements PreloadingStrategy {
 
 Define routes with metadata:
 
-```ts
+```typescript
 const routes: Routes = [
   {
     path: "admin",
@@ -1331,7 +1331,7 @@ const routes: Routes = [
 
 Register in your `AppModule`:
 
-```ts
+```typescript
 @NgModule({
   imports: [
     RouterModule.forRoot(routes, {
@@ -1407,7 +1407,7 @@ UI updates when asynchronous code finishes.
 - Avoids unnecessary change detection triggers.
 - Best for CPU-heavy or non-UI tasks (e.g. polling, animation loops).
 
-```ts
+```typescript
 constructor(private ngZone: NgZone) { }
 
 runHeavyLoop() {
@@ -1419,7 +1419,7 @@ runHeavyLoop() {
 
 If you later need to update the UI:
 
-```ts
+```typescript
 ngZone.run(() => {
   this.data = newData;
 });
@@ -1450,7 +1450,7 @@ trigger updates—acting like lightweight, built-in reactive variables.
 - A **computed** signal derives its value from other signals; it's lazily
   evaluated and memoized, recalculating only when dependencies change.
 
-```ts
+```typescript
 import { signal, computed } from "@angular/core";
 
 const count = signal(0);
@@ -1770,7 +1770,7 @@ possible.
 - It uses **synchronous loading** and the `require()` function to import
   modules, and `module.exports` or `exports` to expose content from a module.
 
-  ```js
+  ```javascript
   // math.js
   exports.add = (a, b) => a + b;
 
@@ -1934,7 +1934,7 @@ client.
 
 Handling user input (search fields) and canceling inflight HTTP requests:
 
-```ts
+```typescript
 this.searchControl.valueChanges
   .pipe(
     debounceTime(300),
@@ -1955,7 +1955,7 @@ this.searchControl.valueChanges
 Angular `HttpClient` supports request cancellation via **RxJS `unsubscribe()`**
 or **`takeUntil()`**.
 
-```ts
+```typescript
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
@@ -1975,7 +1975,7 @@ this.destroy$.complete();
 > 🔍 Angular 16+ `HttpClient` now **supports `AbortSignal`** via `signal` option
 > if you're using fetch under the hood.
 
-```ts
+```typescript
 const controller = new AbortController();
 
 this.http
@@ -1999,7 +1999,7 @@ controller.abort();
 
 Read a single value from an observable once (e.g. route parameters):
 
-```ts
+```typescript
 this.route.params.pipe(take(1)).subscribe((params) => {
   /* use params */
 });
@@ -2012,7 +2012,7 @@ to avoid `EmptyError`.
 
 Run multiple HTTP calls in parallel and combine results:
 
-```ts
+```typescript
 forkJoin([this.http.get("/api/a"), this.http.get("/api/b")])
   .pipe(catchError((err) => of([null, null])))
   .subscribe(([a, b]) => {
@@ -2028,7 +2028,7 @@ forkJoin([this.http.get("/api/a"), this.http.get("/api/b")])
 
 Accumulate values over time using `scan()`—useful for counters or lists:
 
-```ts
+```typescript
 fromEvent(button, "click")
   .pipe(
     map(() => 1),
@@ -2043,7 +2043,7 @@ fromEvent(button, "click")
 
 Use `tap()` when you need to debug or assign data without altering the stream:
 
-```ts
+```typescript
 httpCall$
   .pipe(
     tap((response) => console.log("Response:", response)),
@@ -2097,7 +2097,7 @@ httpCall$
 
 Best when you want the stream to succeed with a default:
 
-```ts
+```typescript
 this.data$ = this.http.get<Data>("/api/data").pipe(
   catchError((err) => {
     console.error(err);
@@ -2110,7 +2110,7 @@ this.data$ = this.http.get<Data>("/api/data").pipe(
 
 Use `EMPTY` to resolve the stream silently:
 
-```ts
+```typescript
 .pipe(catchError(err => {
   console.error(err);
   return EMPTY;
@@ -2121,7 +2121,7 @@ Use `EMPTY` to resolve the stream silently:
 
 Return the caught observable to effectively restart the stream:
 
-```ts
+```typescript
 .pipe(
   catchError((err, caught$) => {
     console.error(err);

@@ -90,7 +90,7 @@ invoked:
 - It's pushed onto the stack.
 - When it completes, it’s popped off.
 
-```js
+```javascript
 function greet() {
   console.log("Hello");
 }
@@ -138,7 +138,7 @@ This is how asynchronous code is handled.
 
 #### Execution Order Example
 
-```js
+```javascript
 console.log("Start");
 
 setTimeout(() => console.log("Timeout"), 0);
@@ -170,7 +170,7 @@ Timeout
 `async/await` is **syntactic sugar** over Promises that makes asynchronous code
 look synchronous.
 
-```js
+```javascript
 async function fetchData() {
   console.log("1");
   await Promise.resolve();
@@ -201,7 +201,7 @@ Web Workers allow JS to offload work to **background threads**.
 - No access to DOM or `window`.
 - Ideal for CPU-intensive tasks (image processing, parsing, etc.).
 
-```js
+```javascript
 // main.js
 const worker = new Worker("worker.js");
 worker.postMessage("start");
@@ -211,7 +211,7 @@ worker.onmessage = function (e) {
 };
 ```
 
-```js
+```javascript
 // worker.js
 self.onmessage = function (e) {
   if (e.data === "start") {
@@ -287,7 +287,7 @@ the main UI thread**.
 </html>
 ```
 
-```js
+```javascript
 // worker.js
 
 self.onmessage = function (event) {
@@ -431,7 +431,7 @@ A **JavaScript Object** is a **key-value data structure** used to store and
 organize data. It’s the foundation of most things in JavaScript, including
 functions, arrays, and even classes.
 
-```js
+```javascript
 const user = {
   name: "Alice",
   age: 30,
@@ -452,7 +452,7 @@ const user = {
   - `enumerable`
   - `configurable`
 
-```js
+```javascript
 Object.defineProperty(user, "role", {
   value: "admin",
   writable: false,
@@ -478,13 +478,13 @@ Object.defineProperty(user, "role", {
 All objects inherit from `Object.prototype` by default unless created with
 `Object.create(null)`.
 
-```js
+```javascript
 console.log({}.toString()); // [object Object]
 ```
 
 Custom objects can inherit methods via prototypes:
 
-```js
+```javascript
 function Person(name) {
   this.name = name;
 }
@@ -510,7 +510,7 @@ Use `Object.freeze(obj)`. It prevents:
 - Changing existing property values.
 - Modifying descriptors.
 
-```js
+```javascript
 const obj = Object.freeze({ a: 1 });
 obj.a = 2; // No effect
 ```
@@ -523,7 +523,7 @@ Both copy enumerable own properties:
 - Spread `...` syntax is cleaner but can't copy non-enumerables or preserve
   property descriptors.
 
-```js
+```javascript
 const obj1 = { a: 1 };
 const obj2 = { b: 2 };
 
@@ -534,7 +534,7 @@ const merged = { ...obj1, ...obj2 }; // cleaner
 
 They allow **computed access** to object properties.
 
-```js
+```javascript
 const user = {
   firstName: "John",
   lastName: "Doe",
@@ -559,13 +559,13 @@ via the `[[Prototype]]` internal link (set using `__proto__` or
 
 - Shallow clone
 
-  ```js
+  ```javascript
   const clone = { ...original };
   ```
 
 - Deep clone (limited):
 
-  ```js
+  ```javascript
   const deepClone = JSON.parse(JSON.stringify(original));
   ```
 
@@ -576,7 +576,7 @@ via the `[[Prototype]]` internal link (set using `__proto__` or
   Checks whether the key exists **anywhere in the object or its prototype
   chain**.
 
-  ```js
+  ```javascript
   const obj = { name: "Alice" };
   console.log("name" in obj); // true
   ```
@@ -585,7 +585,7 @@ via the `[[Prototype]]` internal link (set using `__proto__` or
 
   Checks whether the key exists **only directly on the object** (not inherited).
 
-  ```js
+  ```javascript
   console.log(obj.hasOwnProperty("name")); // true
   ```
 
@@ -609,7 +609,7 @@ Every JavaScript object has an internal link to another object called its
 
 ### Setting and Getting Prototype
 
-```js
+```javascript
 const animal = {
   eats: true,
 };
@@ -623,7 +623,7 @@ console.log(Object.getPrototypeOf(rabbit) === animal); // true
 
 ### Object Prototype Chain
 
-```js
+```javascript
 function Person(name) {
   this.name = name;
 }
@@ -642,13 +642,44 @@ Here:
 
 ---
 
+## What Does It Mean You Can `new` a Function in JavaScript?
+
+In JS, **functions are special objects**. When a function is **called with
+`new`**, JavaScript treats it as a **constructor call**:
+
+- All functions in JS have an internal `[[Construct]]` method if they’re
+  declared normally (not arrow functions).
+- This makes them callable via `new`.
+- Functions without `[[Construct]]` (like arrow functions or `class` static
+  methods) **cannot** be called with `new`.
+
+### Steps when you do `new Func()`
+
+1. Create a new empty object: `{}`.
+2. Link that object to `Func.prototype` via its internal `[[Prototype]]`.
+3. Call `Func` with `this` bound to that new object.
+4. If `Func` doesn’t return its own object, return the new object.
+
+```javascript
+function Car(brand) {
+  this.brand = brand;
+}
+
+const myCar = new Car("Toyota");
+
+console.log(myCar.brand); // Toyota
+console.log(Object.getPrototypeOf(myCar) === Car.prototype); // true
+```
+
+---
+
 ## Classes
 
 JavaScript introduced the `class` syntax in ES6 as **syntactic sugar** over its
 existing prototype-based object model. Under the hood, nothing fundamentally
 changes—it's still prototype inheritance at work.
 
-```js
+```javascript
 class Person {
   constructor(name) {
     this.name = name;
@@ -681,7 +712,7 @@ mechanism into a cleaner syntax. You still get:
 - **Static methods**: defined directly on the class/function
 - **Instance methods**: defined on the prototype and inherited by instances
 
-```js
+```javascript
 class Foo {
   static staticMethod() {}
   instanceMethod() {}
@@ -690,7 +721,7 @@ class Foo {
 
 Is equivalent to:
 
-```js
+```javascript
 function Foo() {}
 Foo.staticMethod = function () {};
 Foo.prototype.instanceMethod = function () {};
@@ -698,6 +729,16 @@ Foo.prototype.instanceMethod = function () {};
 
 And instances use `instanceMethod` via the prototype chain, while `staticMethod`
 is called on the class itself.
+
+### Class methods vs Arrow functions vs Regular Functions
+
+| Feature                      | `method() {}`                        | `method = () => {}`                                         | Regular Functions                         |
+| ---------------------------- | ------------------------------------ | ----------------------------------------------------------- | ----------------------------------------- |
+| Defined on Prototype         | Yes — shared across instances        | No — created individually per instance                      | No — new function per instance            |
+| `this` Binding               | Dynamic—depends on how called        | Lexically fixed to instance (from outer scope)              | Dynamic—just like regular functions       |
+| Supports `super`             | Yes — inherits from parent class     | No — can't use `super` properly                             | Yes, if method defined in prototype chain |
+| Memory Efficiency            | High — one function shared per class | Low — each instance has its own copy                        | Low — same as arrow function fields       |
+| Use as Constructor/Prototype | N/A — not functions themselves       | No — arrow functions have no `prototype` and can't be `new` | Same limitation for arrow-defined fields  |
 
 ### Interview Questions
 
@@ -716,7 +757,7 @@ is called on the class itself.
 
 Yes. After defining:
 
-```js
+```javascript
 class Cat {}
 Cat.prototype.meow = () => console.log("Meow");
 ```
@@ -758,7 +799,7 @@ Use `Object.freeze(obj)`. It prevents:
 - Changing existing property values.
 - Modifying descriptors.
 
-```js
+```javascript
 const obj = Object.freeze({ a: 1 });
 obj.a = 2; // No effect
 ```
@@ -771,7 +812,7 @@ Both copy enumerable own properties:
 - Spread `...` syntax is cleaner but can't copy non-enumerables or preserve
   property descriptors.
 
-```js
+```javascript
 const obj1 = { a: 1 };
 const obj2 = { b: 2 };
 
@@ -782,7 +823,7 @@ const merged = { ...obj1, ...obj2 }; // cleaner
 
 **Answer:**
 
-```js
+```javascript
 const user = {
   firstName: "John",
   lastName: "Doe",
@@ -815,11 +856,39 @@ properties.
 
 #### What’s the difference between `__proto__`, `prototype`, and `[[Prototype]]`?
 
-| Term            | Description                                                                                                                    |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `__proto__`     | Legacy accessor for `[[Prototype]]`. Still widely supported.                                                                   |
-| `prototype`     | A property on **constructor functions**, used when creating new instances.                                                     |
-| `[[Prototype]]` | The internal slot representing the prototype chain. Not accessible directly, but can be read via `Object.getPrototypeOf(obj)`. |
+- `__proto__`: Legacy accessor for `[[Prototype]]`. Still widely supported.
+- `prototype`: A property on **constructor functions**, used when creating new
+  instances.
+- `[[Prototype]]`: The internal slot representing the prototype chain. Not
+  accessible directly, but can be read via `Object.getPrototypeOf(obj)`.
+
+#### How does the prototype chain work, and why is it important?
+
+When accessing a property on an object that doesn’t exist directly, JavaScript
+traverses up `[[Prototype]]` chain until it either finds it or reaches `null`.
+This chain enables **prototypal inheritance**, allowing objects to reuse methods
+and properties defined higher in the chain. For example, an `Array` instance
+accesses `filter()` via its prototype.
+
+#### How would you implement inheritance using prototypes manually?
+
+Using constructor functions and manually setting the prototype:
+
+```javascript
+function Animal(name) {
+  this.name = name;
+}
+Animal.prototype.speak = () => console.log(this.name);
+
+function Dog(name) {
+  Animal.call(this, name);
+}
+Dog.prototype = Object.create(Animal.prototype);
+Dog.prototype.constructor = Dog;
+```
+
+This sets up prototypal inheritance such that `dog instanceof Animal` works
+correctly.
 
 #### Why is `hasOwnProperty` safer than `"key" in obj`
 
@@ -830,10 +899,205 @@ when looping or validating object shape.
 
 Yes. You can override them directly on the object.
 
-```js
+```javascript
 const obj = Object.create({ greet: () => "Hi" });
 obj.greet = () => "Hello";
 console.log(obj.greet()); // "Hello"
 ```
 
 ---
+
+## What is `this`?
+
+`this` is a special keyword in JavaScript that **refers to the context in which
+a function is executed** — not where it’s defined.
+
+### General Rules for `this` binding
+
+#### Default Binding (non–strict mode)
+
+If a function is called without an explicit owner, `this` defaults to the
+**global object** (`window` in browsers, `global` in Node.js).
+
+```javascript
+function foo() {
+  console.log(this);
+}
+foo(); // window (in browsers, non-strict mode)
+```
+
+In **strict mode**:
+
+```javascript
+"use strict";
+function foo() {
+  console.log(this);
+}
+foo(); // undefined
+```
+
+#### Implicit Binding
+
+When you call a function as a **property of an object**, `this` refers to that
+object.
+
+```javascript
+const obj = {
+  name: "David",
+  greet: function () {
+    console.log(`Hi, I am ${this.name}`);
+  },
+};
+obj.greet(); // "Hi, I am David"
+```
+
+⚠ **Pitfall**: Losing implicit binding
+
+```javascript
+const greetFn = obj.greet;
+greetFn(); // undefined (or "Hi, I am undefined") because `this` is lost
+```
+
+#### Explicit Binding (`call`, `apply`, `bind`)
+
+You can explicitly set `this` using these methods.
+
+```javascript
+function greet(city) {
+  console.log(`Hi, I am ${this.name} from ${city}`);
+}
+const person = { name: "David" };
+
+greet.call(person, "Berlin"); // Hi, I am David from Berlin
+greet.apply(person, ["Berlin"]); // same
+const boundGreet = greet.bind(person, "Berlin");
+boundGreet(); // Hi, I am David from Berlin
+```
+
+#### `new` Binding
+
+When a function is called with `new`, a new object is created and set as `this`.
+
+```javascript
+function Person(name) {
+  this.name = name;
+}
+const p = new Person("David");
+console.log(p.name); // "David"
+```
+
+#### Arrow Functions
+
+Arrow functions **do not have their own `this`** — they lexically inherit `this`
+from their surrounding scope.
+
+```javascript
+const obj = {
+  name: "David",
+  greet: () => {
+    console.log(this.name); // undefined, `this` is from global scope
+  },
+};
+obj.greet();
+```
+
+Useful for preserving `this`:
+
+```javascript
+function Timer() {
+  this.seconds = 0;
+  setInterval(() => {
+    this.seconds++;
+    console.log(this.seconds);
+  }, 1000);
+}
+new Timer();
+```
+
+### Special Cases / Edge Cases
+
+#### Method extracted from object
+
+```javascript
+const obj = {
+  name: "Test",
+  sayName() {
+    console.log(this.name);
+  },
+};
+const fn = obj.sayName;
+fn(); // undefined
+```
+
+#### Event Handlers
+
+```javascript
+document.querySelector("button").addEventListener("click", function () {
+  console.log(this); // button element
+});
+
+document.querySelector("button").addEventListener("click", () => {
+  console.log(this); // inherits from enclosing scope (likely window)
+});
+```
+
+#### `this` in Class methods
+
+```javascript
+class Person {
+  constructor(name) {
+    this.name = name;
+  }
+  sayName() {
+    console.log(this.name);
+  }
+}
+const p = new Person("David");
+p.sayName(); // "David"
+
+const method = p.sayName;
+method(); // undefined (method lost its binding)
+```
+
+### Interview Questions
+
+#### Quick Interview Traps
+
+```javascript
+var name = "Global";
+const obj = {
+  name: "Obj",
+  arrow: () => console.log(this.name),
+  method() {
+    console.log(this.name);
+  },
+};
+obj.arrow(); // undefined (arrow has no own `this`)
+obj.method(); // "Obj"
+```
+
+#### Explain the different ways `this` gets bound in JavaScript.
+
+- **Global/Function Call:** In non-strict mode, `this` is the global object; in
+  strict mode, it's `undefined`.
+- **Method Call:** `obj.method()` → `this` is `obj`.
+- **Constructor (`new`):** `this` points to the newly created object.
+- **Explicit Binding:** `.call()`, `.apply()`, `.bind()` explicitly set `this`.
+- **Arrow Functions:** `this` is lexically inherited from the enclosing scope.
+
+#### What are common pitfalls with `this` in callbacks or event handlers?
+
+Losing `this` context happens when passing methods as callbacks:
+
+```javascript
+const obj = {
+  name: "Alice",
+  greeting() {
+    console.log(this.name);
+  },
+};
+setTimeout(obj.greeting, 0); // `this` lost → undefined or global
+```
+
+Fixes include `.bind(obj)`, arrow function wrappers, or caching the context
+(`const self = this`).

@@ -292,7 +292,7 @@ customElements.define("mf-products", MFProducts);
 
 #### Example: Module Federation (Client-Side)
 
-```js
+```javascript
 // Host app webpack config
 remotes: {
   dashboard: 'dashboardApp@http://localhost:3001/remoteEntry.js',
@@ -630,7 +630,7 @@ This sets up `webpack.config.js` and `webpack.prod.config.js` automatically.
 
 `projects/mfe1/webpack.config.js`:
 
-```js
+```javascript
 const {
   withModuleFederationPlugin,
 } = require("@angular-architects/module-federation/webpack");
@@ -652,7 +652,7 @@ module.exports = withModuleFederationPlugin({
 
 `shell/webpack.config.js`:
 
-```js
+```javascript
 const {
   withModuleFederationPlugin,
 } = require("@angular-architects/module-federation/webpack");
@@ -673,7 +673,7 @@ module.exports = withModuleFederationPlugin({
 
 In `app.routes.ts` of Shell:
 
-```ts
+```typescript
 {
   path: 'feature',
   loadChildren: () =>
@@ -689,7 +689,7 @@ This lazy-loads `FeatureModule` from `mfe1`.
 
 Create a service in a shared library and mark it as `singleton`.
 
-```ts
+```typescript
 @Injectable({ providedIn: "root" })
 export class MessageBusService {
   private subject = new Subject<string>();
@@ -708,7 +708,7 @@ messages like a pub-sub.
 
 For looser coupling, use:
 
-```ts
+```typescript
 // Send
 window.postMessage({ type: "event", payload: "hello" }, "*");
 
