@@ -1101,3 +1101,272 @@ setTimeout(obj.greeting, 0); // `this` lost → undefined or global
 
 Fixes include `.bind(obj)`, arrow function wrappers, or caching the context
 (`const self = this`).
+
+---
+
+## Arrays
+
+### push
+
+```javascript
+arr.push("foo");
+// [      | + ]
+```
+
+### pop
+
+```javascript
+arr.pop();
+// [      | - ]
+```
+
+### shift
+
+```javascript
+arr.shift();
+// [ - |      ]
+```
+
+### unshift
+
+```javascript
+arr.unshift("foo");
+// [ + |      ]
+```
+
+### concat
+
+```javascript
+["foo", "bar"].concat(["qux"]);
+// ["foo", "bar", "qux"]
+```
+
+### includes
+
+```javascript
+["foo", "bar"].includes("bar");
+// true
+```
+
+### indexOf
+
+```javascript
+["foo", "bar"].indexOf("bar");
+// 1
+
+["foo", "bar"].indexOf("qux");
+// -1
+```
+
+### reverse
+
+> The `reverse()` method reverses an array **in place**.
+
+```javascript
+["foo", "bar"].reverse();
+// ["bar", "foo"]
+```
+
+### join
+
+```javascript
+["Foo", "Bar", "Qux"].join();
+// "Foo,Bar,Qux"
+
+["Foo", "Bar", "Qux"].join("");
+// "FooBarQux"
+
+["Foo", "Bar", "Qux"].join("-");
+// "Foo-Bar-Qux"
+```
+
+### slice
+
+```javascript
+// make a copy of an array
+let foo = [1, 2, 3];
+let bar = foo;
+let qux = foo.slice();
+
+foo === bar;
+// true <- referencing the same object in memory
+
+foo === qux;
+// false <- copy
+```
+
+```javascript
+["foo", "bar", "qux"].slice(1);
+// ["bar", "qux"]
+
+["foo", "bar", "qux"].slice(1, 2);
+// ["bar"]
+
+["foo", "bar", "qux"].slice(-1);
+// ["qux"]
+```
+
+### splice
+
+> The `splice()` method changes the contents of an array by removing or
+> replacing existing elements and/or adding new elements in **place**.
+
+```javascript
+// arr.splice(start, ?deleteCount, ...items);
+// returns the deleted items, if any
+
+let foo = ["foo", "bar", "qux"];
+foo.splice(1, 0, "baz");
+// return: []
+// foo: ["foo", "baz", "bar", "qux"]
+
+foo.splice(2, 1);
+// return: ["bar"]
+// foo: ["foo", "baz", "qux"]
+
+foo.splice(0, 2, "FOO", "BAZ");
+// return: ["foo", "baz"]
+// foo: ["FOO", "BAZ", "qux"]
+```
+
+### fill
+
+```javascript
+[1, 2, 3, 4, 5].fill(6);
+// [6, 6, 6, 6, 6]
+
+[1, 2, 3, 4, 5].fill(6, 2);
+// [1, 2, 6, 6, 6]
+
+[1, 2, 3, 4, 5].fill(6, 2, 4);
+// [1, 2, 6, 6, 5]
+```
+
+### sort
+
+> The `sort()` method sorts the elements of an array **in place** and returns
+> the sorted array.
+
+```javascript
+["foo", "bar", "qux"].sort();
+// ["bar", "foo", "qux"]
+
+[1, 33, 15, 100].sort();
+// [1, 100, 15, 33]
+
+[1, 33, 15, 100].sort((a, b) => a - b);
+// [1, 15, 33, 100]
+```
+
+### forEach
+
+```javascript
+["foo", "bar", "qux"].forEach((currentValue) => {});
+
+["foo", "bar", "qux"].forEach((currentValue, index, array) => {});
+```
+
+### map
+
+```javascript
+let foo = ["foo", "bar", "qux"].map((currentValue) => {
+  return currentValue.toUpperCase();
+});
+// foo: ["FOO", "BAR", "QUX"]
+
+let foo = ["foo", "bar", "qux"].map((currentValue, index, array) => {});
+```
+
+### find
+
+> Returns the value of the **first element** in the array that satisfies the
+> provided testing function. Otherwise, `undefined` is returned.
+
+```javascript
+["foo", "bar"].find((element) => {
+  return element === "bar";
+});
+// "bar"
+
+["foo", "bar"].find((element) => {
+  return element === "qux";
+});
+// undefined
+
+["foo", "bar"].find((element, index, array) => {});
+```
+
+### filter
+
+> Returns a new array with the elements that pass the test. If no elements pass
+> the test, an empty array will be returned.
+
+```javascript
+["foo", "bar", "bar baz"].filter((currentValue) => {
+  return currentValue.includes("bar");
+});
+// ["bar", "bar baz"]
+
+["foo", "bar"].filter((currentValue) => {
+  return currentValue.includes("qux");
+});
+// []
+
+["foo", "bar"].filter((currentValue, index, array) => {});
+```
+
+### every
+
+> Returns `true` if the callback function returns a truthy value for **every**
+> array element. Otherwise, `false`.
+
+```javascript
+[10, 20, 30].every((element) => {
+  return element > 0;
+});
+// true
+
+["foo", "bar", "baz"].every((element) => {
+  return element.includes("a");
+});
+// false
+
+["foo", "bar"].every((element, index, array) => {});
+```
+
+### some
+
+> Returns `true` if the callback function returns a truthy value for **at least
+> one** element in the array. Otherwise, `false`.
+
+```javascript
+[1, 3, 5, 7].some((element) => {
+  return element > 4;
+});
+// true
+
+[1, 3, 5, 7].some((element) => {
+  return element > 11;
+});
+// false
+
+["foo", "bar"].some((element, index, array) => {});
+```
+
+### reduce
+
+> If no `initialValue` given, `accumulator` will be set to the first element.
+
+```javascript
+[1, 2, 3, 4].reduce((accumulator, currentValue) => {
+  return accumulator + currentValue;
+}, 0);
+// 10
+
+[1, 2, 3, 4].reduce((accumulator, currentValue) => {
+  return currentValue % 2 === 0 ? accumulator + currentValue : accumulator;
+}, 0);
+// 6
+
+[1, 2, 3].reduce((accumulator, currentValue, index, array) => {}, initialValue);
+```
