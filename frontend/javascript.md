@@ -1250,6 +1250,146 @@ Fixes include `.bind(obj)`, arrow function wrappers, or caching the context
 
 ---
 
+## Generator Functions
+
+A **generator function** is a special type of function in JavaScript that can be
+paused and resumed. They are defined with `function*` syntax and use `yield` to
+_return a value temporarily_ while keeping the function’s internal state.
+
+```javascript
+function* exampleGenerator() {
+  yield 1;
+  yield 2;
+  yield 3;
+}
+
+const gen = exampleGenerator();
+console.log(gen.next()); // { value: 1, done: false }
+console.log(gen.next()); // { value: 2, done: false }
+console.log(gen.next()); // { value: 3, done: false }
+console.log(gen.next()); // { value: undefined, done: true }
+```
+
+### How `yield` works
+
+- `yield <expression>`: pauses execution, returns `<expression>`.
+- `generator.next(<value>)`: resumes execution, and `<value>` becomes the result
+  of the last `yield` inside the function.
+
+```javascript
+function* greet() {
+  const name = yield "What's your name?";
+  yield `Hello, ${name}!`;
+}
+
+const g = greet();
+console.log(g.next()); // Ask: "What's your name?"
+console.log(g.next("Alice")); // Respond: "Hello, Alice!"
+```
+
+### Execution Model vs Normal Functions
+
+| Normal Functions               | Generator Functions                            |
+| ------------------------------ | ---------------------------------------------- |
+| Run from start to finish once. | Can pause (`yield`) and resume multiple times. |
+| Return a single value.         | Return multiple values over time.              |
+| Call returns the result.       | Call returns an **iterator** object.           |
+
+### Usage Scenarios
+
+#### Lazy Evaluation (on-demand data)
+
+```javascript
+function* infiniteCounter() {
+  let i = 0;
+  while (true) yield i++;
+}
+
+const counter = infiniteCounter();
+console.log(counter.next().value); // 0
+console.log(counter.next().value); // 1
+console.log(counter.next().value); // 2
+```
+
+Useful for **infinite streams** or **large data sets** where you don’t want to
+load everything at once.
+
+#### Custom Iterators
+
+You can make any object iterable:
+
+```javascript
+const myCollection = {
+  items: ["apple", "banana", "cherry"],
+  *[Symbol.iterator]() {
+    for (const item of this.items) yield item;
+  },
+};
+
+for (const fruit of myCollection) {
+  console.log(fruit); // apple, banana, cherry
+}
+```
+
+#### Bidirectional Communication
+
+You can send data _into_ a generator at each `next()` call.
+
+```javascript
+function* calculator() {
+  let result = yield;
+  while (true) {
+    const nextValue = yield result;
+    result += nextValue;
+  }
+}
+
+const calc = calculator();
+calc.next(); // start
+console.log(calc.next(5).value); // 5
+console.log(calc.next(3).value); // 8
+```
+
+### Interview Questions
+
+#### What happens if you `return` inside a generator?
+
+It ends the generator, setting `done: true`.
+
+```javascript
+function* g() {
+  yield 1;
+  return 2;
+  yield 3; // never reached
+}
+console.log([...g()]); // [1]
+```
+
+#### Can you `throw` into a generator?
+
+Yes — `iterator.throw(error)` resumes execution by throwing inside the
+generator.
+
+```javascript
+function* g() {
+  try {
+    yield 1;
+  } catch (e) {
+    yield `Caught: ${e}`;
+  }
+}
+const it = g();
+console.log(it.next()); // {value: 1, done: false}
+console.log(it.throw("Oops")); // {value: 'Caught: Oops', done: false}
+```
+
+#### How are generators related to async functions?
+
+`async function` is essentially **a generator + a promise scheduler** that
+automatically handles `.next()` calls.
+
+---
+
 ## Arrays
 
 ### push
