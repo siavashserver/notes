@@ -305,6 +305,168 @@ self.onmessage = function (event) {
 
 ---
 
+## JavaScript Garbage Collector (GC)
+
+The GC automatically frees memory when objects are no longer reachable in the
+program. JavaScript uses **mark-and-sweep**: it marks reachable objects starting
+from roots (`window`, stack variables) and sweeps away the rest.
+
+```js
+let obj = { name: "David" };
+obj = null; // No references, eligible for GC
+```
+
+### Interview Questions
+
+#### How does JavaScript decide when to free memory?
+
+When an object becomes unreachable (no references from root objects), GC removes
+it in a later pass.
+
+#### What’s a memory leak in JS?
+
+Unused objects kept reachable (e.g., via closures, global vars, DOM references).
+
+---
+
+## Closures & Scope Chains
+
+A closure is when a function "remembers" variables from its lexical scope even
+after that scope has exited.
+
+```js
+function makeCounter() {
+  let count = 0;
+  return function () {
+    return ++count;
+  };
+}
+const counter = makeCounter();
+console.log(counter()); // 1
+console.log(counter()); // 2
+```
+
+### Interview Questions
+
+#### How do closures cause memory leaks?
+
+If a closure holds large data that’s no longer needed but still referenced.
+
+#### How does the scope chain work?
+
+Variables are looked up starting in the current scope, then outer scopes, up to
+the global scope.
+
+---
+
+## Modules & Imports
+
+ES modules use `import`/`export` for file-based modularity. They are static
+(resolved at compile time), and run in strict mode.
+
+```js
+// math.js
+export function add(a, b) {
+  return a + b;
+}
+
+// main.js
+import { add } from "./math.js";
+console.log(add(2, 3));
+```
+
+### Interview Questions
+
+#### Difference between CommonJS and ES Modules?
+
+CommonJS is synchronous (`require`), ES modules are static and support
+tree-shaking.
+
+#### Can you `import` conditionally?
+
+Yes, using `import()` (dynamic import) which returns a promise.
+
+---
+
+## Type Coercion & Equality
+
+JavaScript converts values between types automatically (implicit coercion). `==`
+uses coercion, `===` doesn’t.
+
+```js
+console.log(1 == "1"); // true
+console.log(1 === "1"); // false
+console.log([] == 0); // true ( [] → '' → 0 )
+```
+
+### Interview Questions
+
+#### Why `[] == 0` is `true`?
+
+`[]` → `''` → `0` when coerced to number.
+
+#### When should you use `==`?
+
+Generally avoid, unless you explicitly want coercion.
+
+---
+
+## WeakMap / WeakSet
+
+They hold _weak_ references to keys, allowing GC to collect them if there are no
+other references.
+
+- `WeakMap`: keys must be objects. Values are arbitrary.
+- `WeakSet`: holds objects without duplicates.
+
+```js
+let wm = new WeakMap();
+let obj = {};
+wm.set(obj, "secret");
+obj = null; // GC can collect obj & its entry in wm
+```
+
+### Interview Questions
+
+#### Why use WeakMap over Map?
+
+For storing metadata tied to object lifecycle without preventing GC.
+
+#### Can you iterate WeakMap?
+
+No — keys are not enumerable.
+
+---
+
+## Symbol & Well-known Symbols
+
+`Symbol()` creates unique identifiers. **Well-known symbols** are predefined
+ones that let you customize object behavior (`Symbol.iterator`,
+`Symbol.toStringTag`, etc.).
+
+```js
+const id = Symbol("id");
+let user = { name: "Ali", [id]: 123 };
+
+let arr = [1, 2, 3];
+arr[Symbol.iterator] = function* () {
+  yield 42;
+};
+console.log([...arr]); // [42]
+```
+
+### Interview Questions
+
+#### Why use Symbols as object keys?
+
+To avoid name collisions and keep keys hidden from normal iteration.
+
+#### Give an example of a well-known symbol.
+
+`Symbol.iterator` — defines default iteration behavior.
+
+---
+
 ## Promises & Async/Await
 
 ### What is a Promise?
