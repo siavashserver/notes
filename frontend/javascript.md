@@ -1370,3 +1370,189 @@ let foo = ["foo", "bar", "qux"].map((currentValue, index, array) => {});
 
 [1, 2, 3].reduce((accumulator, currentValue, index, array) => {}, initialValue);
 ```
+
+---
+
+## String search
+
+### includes
+
+```javascript
+"foo bar qux".includes("bar");
+/* true */
+
+"foo bar qux".includes("bar", 5);
+/* false */
+```
+
+### endsWith
+
+```javascript
+"foo bar".endsWith("bar");
+/* true */
+```
+
+### startsWith
+
+```javascript
+"foo bar".startsWith("foo");
+/* true */
+```
+
+### indexOf
+
+```javascript
+"foo bar".indexOf("bar");
+/* 4 */
+
+"foo bar".indexOf("qux");
+/* -1 */
+```
+
+### lastIndexOf
+
+```javascript
+"foo bar bar".lastIndexOf("bar");
+/* 8 */
+
+"foo bar bar".lastIndexOf("qux");
+/* -1 */
+```
+
+### test
+
+> TODO
+
+[RegExp.test](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test)
+
+```javascript
+
+```
+
+### search
+
+> TODO
+
+[String.search](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/search)
+
+```javascript
+
+```
+
+### match
+
+> TODO
+
+[String.match](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/match)
+
+```javascript
+
+```
+
+### matchAll
+
+> TODO
+
+[String.matchAll](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/matchAll)
+
+```javascript
+
+```
+
+## String manipulation
+
+### concat
+
+```javascript
+"foo".concat(" ", "bar", " ", "qux");
+/* "foo bar qux" */
+```
+
+### padEnd
+
+```javascript
+"foo".padEnd(7, ".");
+/* "foo...." */
+```
+
+### padStart
+
+```javascript
+"foo".padStart(7, ".");
+/* "....foo" */
+```
+
+### repeat
+
+```javascript
+"z".repeat(3);
+/* "zzz" */
+```
+
+### replaceAll
+
+[replaceAll](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/replaceAll)
+
+```javascript
+"The quick brown fox jumps over the lazy dog".replaceAll("dog", "cat");
+/* "The quick brown fox jumps over the lazy cat" */
+
+"The quick brown fox jumps over the lazy dog".replaceAll(/dog/gi, "cat");
+/* "The quick brown fox jumps over the lazy cat" */
+```
+
+### slice
+
+```javascript
+"foo bar qux".slice(4);
+/* "bar qux" */
+
+"foo bar qux".slice(4, 7);
+/* "bar" */
+
+"foo bar qux".slice(-3);
+/* "qux" */
+```
+
+### split
+
+```javascript
+"foo bar qux".split();
+/* ["foo bar qux"] */
+
+"foo bar qux".split("");
+/* ["f", "o", "o", " ", "b", "a", "r", " ", "q", "u", "x"] */
+
+"foo bar qux".split(" ");
+/* ["foo", "bar", "qux"] */
+
+"foo bar qux".split(" ", 2);
+/* ["foo", "bar"] */
+```
+
+### toLowerCase
+
+```javascript
+"FOO".toLowerCase();
+/* "foo" */
+```
+
+### toUpperCase
+
+```javascript
+"foo".toUpperCase();
+/* "FOO" */
+```
+
+### trim
+
+```javascript
+"  foo  ".trim();
+/* "foo" */
+
+"  foo  ".trimStart();
+/* "foo  " */
+
+"  foo  ".trimEnd();
+/* "  foo" */
+```
