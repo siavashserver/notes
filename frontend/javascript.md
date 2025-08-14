@@ -1556,3 +1556,443 @@ let foo = ["foo", "bar", "qux"].map((currentValue, index, array) => {});
 "  foo  ".trimEnd();
 /* "  foo" */
 ```
+
+---
+
+## Managing events
+
+```javascript
+function foo(event) {}
+
+target.addEventListener("click", foo);
+
+target.removeEventListener("click", foo);
+```
+
+## Event types
+
+[Event reference](https://developer.mozilla.org/en-US/docs/Web/Events)
+
+### Window events
+
+#### load
+
+> The `load` event is fired when the whole page has loaded, including all
+> dependent resources such as stylesheets and images.
+
+```javascript
+window.addEventListener("load", foo);
+```
+
+#### unload
+
+> The `unload` event is fired when the document or a child resource is being
+> unloaded.
+
+```javascript
+window.addEventListener("unload", foo);
+```
+
+### Network events
+
+#### online
+
+> The `online` event of the `Window` interface is fired when the browser has
+> **gained** access to the network.
+
+```javascript
+window.addEventListener("online", foo);
+```
+
+#### offline
+
+> The `offline` event of the `Window` interface is fired when the browser has
+> **lost** access to the network.
+
+```javascript
+window.addEventListener("offline", foo);
+```
+
+### Focus events
+
+#### focus
+
+> The `focus` event fires when an element has received focus.
+
+```javascript
+target.addEventListener("focus", foo, true);
+```
+
+#### blur
+
+> The `blur` event fires when an element has lost focus.
+
+```javascript
+target.addEventListener("blur", foo, true);
+```
+
+### Viewport events
+
+#### requestFullscreen
+
+```javascript
+element.requestFullscreen().catch((error) => {});
+
+const fullscreen_element = document.fullscreenElement;
+// fullscreen_element <- if already in fullscreen mode
+// null <- if not
+
+// exit fullscreen mode
+document
+  .exitFullscreen()
+  .then(foo)
+  .catch((error) => {});
+```
+
+#### fullscreenchange
+
+```javascript
+target.addEventListener("fullscreenchange", foo);
+```
+
+#### fullscreenerror
+
+```javascript
+target.addEventListener("fullscreenerror", foo);
+```
+
+#### resize
+
+```javascript
+window.addEventListener("resize", foo);
+```
+
+#### scroll
+
+```javascript
+document.addEventListener("scroll", foo);
+```
+
+### Keyboard events
+
+#### keydown
+
+> The `keydown` event is fired when a key is pressed.
+
+```javascript
+target.addEventListener("keydown", foo);
+```
+
+#### keyup
+
+> The `keyup` event is fired when a key is released.
+
+```javascript
+target.addEventListener("keyup", foo);
+```
+
+#### KeyboardEvent
+
+[KeyboardEvent](https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent)
+
+##### Modifier keys
+
+```javascript
+// true <- if held down
+// false <- else
+const altKeyState = KeyboardEvent.altKey;
+const ctrlKeyState = KeyboardEvent.ctrlKey;
+const shiftKeyState = KeyboardEvent.shiftKey;
+const metaKeyState = KeyboardEvent.metaKey;
+
+// true <- if held down such that it is automatically repeating
+// false <- else
+const repeatState = KeyboardEvent.repeat;
+```
+
+##### Key codes
+
+> The `KeyboardEvent.code` property represents a physical key on the keyboard.
+> This property is useful when you want to handle keys based on their physical
+> positions on the input device rather than the characters associated with those
+> keys.
+
+> To determine what character corresponds with the key event, use the
+> `KeyboardEvent.key` property instead.
+
+[KeyboardEvent: code
+values](https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/code/code_values)
+
+```javascript
+KeyboardEvent.code;
+// "KeyA"
+```
+
+### Mouse events
+
+[MouseEvent](https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent)
+
+| Property  | Description                                        |
+| --------- | -------------------------------------------------- |
+| `pageX`   | The **X** coordinate relative to the **page**.     |
+| `pageY`   | The **Y** coordinate relative to the **page**.     |
+| `clientX` | The **X** coordinate relative to the **viewport**. |
+| `clientY` | The **Y** coordinate relative to the **viewport**. |
+
+| Property   | Description                                   |
+| ---------- | --------------------------------------------- |
+| `altKey`   | Returns `true` if the **alt** key was down.   |
+| `ctrlKey`  | Returns `true` if the **ctrl** key was down.  |
+| `shiftKey` | Returns `true` if the **shift** key was down. |
+| `metaKey`  | Returns `true` if the **meta** key was down.  |
+
+#### click
+
+> A pointing device button has been pressed and released.
+
+```javascript
+target.addEventListener("click", foo);
+```
+
+#### contextmenu
+
+> The `contextmenu` event fires when the user attempts to open a context menu.
+
+```javascript
+target.addEventListener("contextmenu", (event) => {
+  event.preventDefault(); // disable context menu
+  // event logic
+});
+```
+
+#### dblclick
+
+> The `dblclick` event fires when a pointing device button (such as a mouse's
+> primary button) is double-clicked
+
+```javascript
+target.addEventListener("dblclick", foo);
+```
+
+#### mousedown
+
+> This differs from the `click` event in that `click` is fired after a full
+> click action occurs; that is, the mouse button is pressed and released while
+> the pointer remains inside the same element. `mousedown` is fired the moment
+> the button is initially pressed.
+
+```javascript
+target.addEventListener("mousedown", foo);
+```
+
+#### mouseup
+
+> The `mouseup` event is fired at an `Element` when a button on a pointing
+> device (such as a mouse or trackpad) is released while the pointer is located
+> inside it.
+
+```javascript
+target.addEventListener("mouseup", foo);
+```
+
+#### wheel
+
+> The `wheel` event fires when the user rotates a wheel button on a pointing
+> device (typically a mouse).
+
+```javascript
+target.addEventListener("wheel", (event) => {
+  event.preventDefault(); // disable page scroll
+  const delta = event.deltaY; // vertical scroll amount
+  // event logic
+});
+```
+
+#### mousemove
+
+> The `mousemove` event is fired at an `Element` when a pointing device (usually
+> a mouse) is moved while the cursor's hotspot is inside it.
+
+```javascript
+target.addEventListener("mousemove", foo);
+```
+
+#### mouseover
+
+> The `mouseover` event is fired at an `Element` when a pointing device (such as
+> a mouse or trackpad) is used to move the cursor onto the element or one of its
+> child elements.
+
+```javascript
+target.addEventListener("mouseover", foo);
+```
+
+#### mouseleave
+
+> `mouseleave` is fired when the pointer has exited the element and all of its
+> descendants, whereas `mouseout` is fired when the pointer leaves the element
+> or leaves one of the element's descendants (even if the pointer is still
+> within the element).
+
+```javascript
+target.addEventListener("mouseleave", foo);
+```
+
+### Drag & Drop events
+
+| Property    | Description                                                                                              |
+| ----------- | -------------------------------------------------------------------------------------------------------- |
+| `dragstart` | The user starts dragging an element or text selection.                                                   |
+| `dragend`   | A drag operation is being ended.                                                                         |
+| `dragover`  | An element or text selection is being dragged over a valid drop target (fired continuously every 350ms). |
+| `dragenter` | A dragged element or text selection enters a valid drop target.                                          |
+| `dragleave` | A dragged element or text selection leaves a valid drop target.                                          |
+| `drop`      | An element is dropped on a valid drop target.                                                            |
+
+#### Element drag and drop
+
+[Drag Event
+Example](https://developer.mozilla.org/en-US/docs/Web/API/Document/drag_event)
+
+```html
+<div class="dropzone">
+  <div class="draggable" draggable="true">This div is draggable</div>
+</div>
+<div class="dropzone"></div>
+<div class="dropzone"></div>
+<div class="dropzone"></div>
+```
+
+```css
+.draggable {
+  width: 200px;
+  height: 20px;
+  text-align: center;
+  background: white;
+}
+
+.dropzone {
+  width: 200px;
+  height: 20px;
+  background: blueviolet;
+  margin-bottom: 10px;
+  padding: 10px;
+}
+```
+
+```javascript
+let dragged;
+
+/* draggable target events */
+document.addEventListener("dragstart", (event) => {
+  dragged = event.target;
+  event.target.style.opacity = 0.3;
+});
+
+document.addEventListener("dragend", (event) => {
+  event.target.style.opacity = "";
+});
+
+/* drop target events */
+document.addEventListener("dragover", (event) => {
+  // prevent default to allow drop
+  event.preventDefault();
+});
+
+document.addEventListener("dragenter", (event) => {
+  if (event.target.className == "dropzone") {
+    event.target.style.background = "purple";
+  }
+});
+
+document.addEventListener("dragleave", (event) => {
+  if (event.target.className == "dropzone") {
+    event.target.style.background = "";
+  }
+});
+
+document.addEventListener("drop", (event) => {
+  // prevent default action (open as link for some elements)
+  event.preventDefault();
+
+  if (event.target.className == "dropzone") {
+    event.target.style.background = "";
+    dragged.remove();
+    event.target.append(dragged);
+  }
+});
+```
+
+#### File drag and drop
+
+```javascript
+fileDropTarget.addEventListener("dragover", (event) => {
+  // prevent default to allow drop
+  event.preventDefault();
+});
+
+fileDropTarget.addEventListener("drop", (event) => {
+  // prevent default action (open as link for some elements)
+  event.preventDefault();
+
+  console.log(event.dataTransfer.files);
+});
+```
+
+#### Dragging elements
+
+[What is `this` in event
+listeners?](https://metafizzy.co/blog/this-in-event-listeners/)
+
+```html
+<div class="draggable"></div>
+```
+
+```css
+.draggable {
+  display: inline-block;
+  position: relative;
+  width: 150px;
+  height: 150px;
+  background: #19f;
+  border-radius: 8px;
+  cursor: move;
+}
+```
+
+```javascript
+var dragElem = document.querySelector(".draggable");
+
+var x = 0;
+var y = 0;
+var dragStartX, dragStartY, pointerDownX, pointerDownY;
+
+dragElem.addEventListener("mousedown", function (event) {
+  // keep track of start positions
+  dragStartX = x;
+  dragStartY = y;
+  pointerDownX = event.pageX;
+  pointerDownY = event.pageY;
+  // add move & up events
+  window.addEventListener("mousemove", onmousemove);
+  window.addEventListener("mouseup", onmouseup);
+});
+
+function onmousemove(event) {
+  // how much has moved
+  var moveX = event.pageX - pointerDownX;
+  var moveY = event.pageY - pointerDownY;
+  // add movement to position
+  x = dragStartX + moveX;
+  y = dragStartY + moveY;
+  // position element
+  dragElem.style.left = x + "px";
+  dragElem.style.top = y + "px";
+}
+
+function onmouseup() {
+  // remove move & up events
+  window.removeEventListener("mousemove", onmousemove);
+  window.removeEventListener("mouseup", onmouseup);
+}
+```
