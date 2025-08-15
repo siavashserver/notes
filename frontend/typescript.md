@@ -65,35 +65,148 @@ interface Greeter {
 
 ## Generics
 
-Allow components/functions to work with **any type**, but still be type-safe.
-Without generics, you’d use `any` — losing type safety. Generics retain
-flexibility _and_ type awareness.
+Generics let you create **reusable, type-safe components** that work with
+multiple types without losing type information.
 
-A generic type parameter `T` acts as a placeholder that is substituted when the
-function/type is used.
+| `any`                    | Generics                     |
+| ------------------------ | ---------------------------- |
+| Loses type information   | Preserves type relationships |
+| No compile-time checking | Enforces type constraints    |
+| Less readable contracts  | Self-documenting             |
+
+```ts
+function identity<T>(value: T): T {
+  return value;
+}
+```
+
+### Generic Functions
 
 ```ts
 function identity<T>(value: T): T {
   return value;
 }
 
-let str = identity<string>("Hello");
-let num = identity(42); // type inferred
+let a = identity<string>("Hello"); // string
+let b = identity(42); // inferred as number
 ```
 
-### Constraints
+### Generic Interfaces
 
 ```ts
-function getLength<T extends { length: number }>(value: T) {
-  return value.length;
+interface ApiResponse<T> {
+  data: T;
+  status: number;
+}
+
+const userResponse: ApiResponse<{ id: number; name: string }> = {
+  data: { id: 1, name: "Alice" },
+  status: 200,
+};
+```
+
+### Generic Classes
+
+```ts
+class Storage<T> {
+  private items: T[] = [];
+  add(item: T) {
+    this.items.push(item);
+  }
+  getAll(): T[] {
+    return this.items;
+  }
+}
+
+const numStore = new Storage<number>();
+numStore.add(1);
+```
+
+### Generic Constraints
+
+Restrict what types can be used with a generic.
+
+```ts
+interface HasId {
+  id: number;
+}
+
+function printId<T extends HasId>(obj: T) {
+  console.log(obj.id);
+}
+
+printId({ id: 5, name: "Test" }); // ✅
+```
+
+### Default Type Parameters
+
+Provide a fallback type if none is given.
+
+```ts
+function log<T = string>(value: T): void {
+  console.log(value);
+}
+
+log(); // defaults to string
+```
+
+### Multiple Type Parameters
+
+```ts
+function merge<A, B>(a: A, b: B): A & B {
+  return { ...a, ...b };
+}
+
+const merged = merge({ name: "Alice" }, { age: 30 });
+// merged: { name: string; age: number }
+```
+
+### Generics with `keyof`
+
+Work with specific keys of an object type.
+
+```ts
+function getProp<T, K extends keyof T>(obj: T, key: K): T[K] {
+  return obj[key];
+}
+
+const user = { id: 1, name: "Bob" };
+getProp(user, "name"); // string
+```
+
+### Generics with Conditional Types
+
+```ts
+type ElementType<T> = T extends (infer U)[] ? U : T;
+type A = ElementType<string[]>; // string
+type B = ElementType<number>; // number
+```
+
+### Distributive Conditional Generics
+
+```ts
+type ExcludeType<T, U> = T extends U ? never : T;
+type Result = ExcludeType<string | number, number>; // string
+```
+
+### Generic Factory Functions
+
+```ts
+function create<T>(c: { new (): T }): T {
+  return new c();
 }
 ```
 
-### Default type
+### Generic Singleton Pattern
 
 ```ts
-function log<T = string>(value: T) {
-  console.log(value);
+class Singleton<T> {
+  private static instance: any;
+  private constructor() {}
+  static getInstance<T>(cls: new () => T): T {
+    if (!this.instance) this.instance = new cls();
+    return this.instance;
+  }
 }
 ```
 
