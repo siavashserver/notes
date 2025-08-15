@@ -219,6 +219,200 @@ role = "admin"; // ✅
 role = "guest"; // ❌
 ```
 
+## Conditional Types
+
+A **type-level if-else** — lets you create a type based on a condition.
+
+- If `T` is assignable to `U`, result is `X`, else `Y`.
+
+```ts
+T extends U ? X : Y
+```
+
+### Basic Example
+
+```ts
+type IsString<T> = T extends string ? "Yes" : "No";
+
+type A = IsString<string>; // "Yes"
+type B = IsString<number>; // "No"
+```
+
+### With Generics
+
+```ts
+function processValue<T>(value: T): T extends string ? string[] : T[] {
+  return (typeof value === "string" ? value.split("") : [value]) as any;
+}
+
+const result1 = processValue("hi"); // string[]
+const result2 = processValue(123); // number[]
+```
+
+### Key Use Cases
+
+#### Type transformations
+
+```ts
+type ElementType<T> = T extends (infer U)[] ? U : T;
+type E1 = ElementType<string[]>; // string
+type E2 = ElementType<number>; // number
+```
+
+#### Excluding or extracting
+
+```ts
+type NonString<T> = T extends string ? never : T;
+type Filtered = NonString<string | number | boolean>; // number | boolean
+```
+
+#### Function overload behavior
+
+```ts
+type ReturnTypeIfString<T> = T extends string ? number : boolean;
+let example: ReturnTypeIfString<"abc">; // number
+```
+
+### Pitfalls
+
+- Conditional types **distribute** over unions:
+
+```ts
+type Dist<T> = T extends string ? "yes" : "no";
+type D = Dist<string | number>; // "yes" | "no"
+```
+
+- Use parentheses to avoid:
+
+```ts
+type NoDist<T> = [T] extends [string] ? "yes" : "no";
+type ND = NoDist<string | number>; // "no"
+```
+
+## Mapped Types
+
+Create new types by transforming **each property** in an existing type.
+
+```ts
+{ [K in Keys]: NewType }
+```
+
+### Basic Example
+
+```ts
+interface User {
+  id: number;
+  name: string;
+}
+
+type Stringify<T> = {
+  [K in keyof T]: string;
+};
+
+type StringifiedUser = Stringify<User>;
+// { id: string; name: string }
+```
+
+### Modifiers
+
+- `readonly` → makes property immutable
+- `?` → makes property optional
+- `-readonly` / `-?` → removes readonly/optional
+
+```ts
+type Optional<T> = { [K in keyof T]?: T[K] };
+type Readonly<T> = { readonly [K in keyof T]: T[K] };
+type Mutable<T> = { -readonly [K in keyof T]: T[K] };
+```
+
+### With `keyof`
+
+```ts
+type Keys = keyof User; // "id" | "name"
+
+type Nullable<T> = { [K in keyof T]: T[K] | null };
+type NullableUser = Nullable<User>;
+// { id: number | null; name: string | null }
+```
+
+### Key Remapping (`as`) _(TS 4.1+)_
+
+```ts
+type RenameKeys<T> = {
+  [K in keyof T as `prefix_${string & K}`]: T[K];
+};
+
+type PrefixedUser = RenameKeys<User>;
+// { prefix_id: number; prefix_name: string }
+```
+
+### Common Use Cases
+
+#### Utility Types Implementation
+
+- `Partial<T>`:
+
+  ```ts
+  type Partial<T> = { [K in keyof T]?: T[K] };
+  ```
+
+- `Omit<T, K>`:
+
+  ```ts
+  type Omit<T, K extends keyof any> = Pick<T, Exclude<keyof T, K>>;
+  ```
+
+#### Deep transformations
+
+```ts
+type DeepPartial<T> = {
+  [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K];
+};
+```
+
+#### Dynamic API responses
+
+```ts
+type ApiResponse<T> = {
+  [K in keyof T]: { value: T[K]; loaded: boolean };
+};
+```
+
+## Combining Conditional + Mapped Types
+
+### Make properties optional if they are functions
+
+```ts
+type OptionalFunctions<T> = {
+  [K in keyof T]: T[K] extends Function ? T[K] | undefined : T[K];
+};
+
+interface Mixed {
+  name: string;
+  log(): void;
+}
+
+type Result = OptionalFunctions<Mixed>;
+// name: string;
+// log?: () => void
+```
+
+### Remove `null` only from string properties
+
+```ts
+type CleanStrings<T> = {
+  [K in keyof T]: T[K] extends string | null ? string : T[K];
+};
+
+interface Data {
+  id: number;
+  title: string | null;
+}
+
+type Cleaned = CleanStrings<Data>;
+// { id: number; title: string }
+```
+
 ---
 
 ## Utility types
