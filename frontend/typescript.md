@@ -528,6 +528,84 @@ type Cleaned = CleanStrings<Data>;
 
 ---
 
+## `tsc` (TypeScript Compiler)
+
+`tsc` is the official TypeScript compiler CLI tool.
+
+### Responsibilities
+
+- Reads `.ts` (TypeScript) files and converts them to `.js` (JavaScript) files.
+- Optionally performs **type-checking** (can even do it without emitting JS if
+  needed).
+- Uses **`tsconfig.json`** to determine compilation rules.
+
+## `tsconfig.json`
+
+A **configuration file** that tells `tsc` **how** to compile TypeScript code.
+
+### Main Purposes
+
+- Specifies which files to include/exclude.
+- Defines target JavaScript version (`ES2017`, `ES2020`, etc.).
+- Enables/disables compiler features (strict mode, decorators, etc.).
+- Sets up path aliases for cleaner imports.
+- Controls module format (`CommonJS`, `ESNext`, etc.).
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "strict": true,
+    "outDir": "./dist",
+    "baseUrl": "./src",
+    "paths": {
+      "@app/*": ["app/*"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
+```
+
+## Angular Build Process & Where They Fit
+
+When you run:
+
+```bash
+ng build
+```
+
+Angular **does NOT** simply run `tsc` directly. Instead, Angular uses
+**`@angular-devkit/build-angular`** (Webpack-based builder) + **`ngc`** (Angular
+Compiler, a superset of `tsc`).
+
+### The flow
+
+1. **Angular CLI loads `angular.json`** – determines build settings
+   (optimization, environment).
+2. **Loads `tsconfig.app.json`** (and `tsconfig.base.json`) – passes compiler
+   options to `ngc`.
+3. **`ngc` (Angular Compiler)**:
+
+   - Runs **type-checking** (like `tsc`).
+   - Performs **Ahead-of-Time (AOT)** compilation (turns Angular HTML templates
+     into TypeScript).
+
+4. **Webpack**:
+
+   - Bundles the generated JS into optimized chunks.
+   - Applies loaders for CSS, HTML, assets.
+
+### Angular's Multiple `tsconfig` files
+
+- `tsconfig.base.json` → Base config for the whole workspace.
+- `tsconfig.app.json` → For application source code.
+- `tsconfig.spec.json` → For unit tests.
+- `tsconfig.json` → Sometimes just extends the base.
+
+---
+
 ## Utility types
 
 ### `Partial<T>`
