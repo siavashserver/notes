@@ -370,99 +370,854 @@ and code signing.
 
 ## Common attack types
 
-### SQL Injection
+| Area                        | Example Questions                                                 | Sample Answers                                                                                                                                    |
+| --------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **SQL Injection**           | What is SQL injection? How to prevent?                            | SQLi is malicious data in queries due to unvalidated inputs. Always use parameterized queries, validate input, and least-privilege DB accounts.   |
+| **XSS**                     | How does Angular mitigate XSS?                                    | Angular auto-escapes interpolations and sanitizes HTML, URL, and style bindings to prevent XSS by default.                                        |
+| **CSRF**                    | How is CSRF mitigated in ASP.NET Core/Angular stack?              | Use server-generated antiforgery tokens; Angular automatically reads and sends specific cookies as headers to match server requirements.          |
+| **Authentication**          | How to securely store passwords?                                  | Use strong algorithms like bcrypt/scrypt with per-user salts, and never store plaintext.                                                          |
+| **IDOR**                    | How to prevent users from seeing each other’s data?               | Enforce access checks at API time to verify ownership or entitlement of the requested resource, never trust client logic.                         |
+| **Sensitive Data Exposure** | What are core strategies to avoid leaks?                          | Enforce HTTPS, encrypt at rest, avoid logging secrets, hash passwords, and use secure cookies.                                                    |
+| **Known Vulnerabilities**   | How to stay up-to-date with dependency vulnerabilities?           | Use regular audit tools (npm audit, dotnet list package --vulnerable), patch quickly and avoid deprecated packages.                               |
+| **DoS/Rate Limiting**       | How do you configure rate limiting in ASP.NET Core?               | Use built-in middleware to set per-IP/user quotas and appropriate error responses, adjusting policies based on endpoint and abuse potential.      |
+| **File Uploads**            | What are secure file upload practices?                            | Accept only specific content-types/extensions, enforce size limits, virus-scan uploads, store outside web root, and never trust file names/paths. |
+| **Security Config**         | What is a Content Security Policy (CSP) and how is it configured? | CSP is a header restricting resource origins and script sources, preventing XSS; set via server responses using middleware or web.config headers. |
+| **Logging**                 | How do you avoid sensitive data in logs?                          | Always filter and redact logs (e.g., passwords, tokens) and restrict log access to authorized personnel only; use structured logging frameworks.  |
+| **General**                 | What is the principle of least privilege?                         | Grant the minimum permissions needed for users, applications, and services, reducing systemic risk from compromised accounts or software bugs.    |
 
-SQL Injection occurs when untrusted input is sent to a database interpreter as
-part of a SQL statement. Attackers can manipulate queries to access, modify or
-delete sensitive data, and even gain full control of the backend database.
+## SQL Injection Attacks
 
-Suppose an app builds a SQL query like:
+### How SQL Injection Works
 
-```sql
-SELECT * FROM Users WHERE Username = 'admin' AND Password = 'password';
+**SQL Injection (SQLi)** is one of the oldest and most dangerous vulnerabilities
+plaguing web applications. It occurs when an attacker is able to insert (or
+“inject”) malicious SQL code into a query sent to the database, often via
+unvalidated user inputs in forms or URLs. The primary risk is when input data is
+concatenated directly into SQL statements, allowing unintended execution.
+Dangerous consequences include unauthorized data access, data manipulation,
+exfiltration, and even full system compromise.
+
+#### Example Attack
+
+Suppose the following (vulnerable) query in plain C# for ASP.NET Core:
+
+```csharp
+string sql = "SELECT * FROM Users WHERE Username='" + username + "' AND Password='" + password + "'";
 ```
 
-If the input isn't sanitized, an attacker could supply `' OR '1'='1` to bypass
-authentication altogether.
+If an attacker inputs `' OR 1=1 --` as the username, the SQL becomes:
 
-#### Mitigation Strategies
+```sql
+SELECT * FROM Users WHERE Username='' OR 1=1 --' AND Password=''
+```
 
-- Parameterized queries / ORM frameworks (e.g. Entity Framework) avoid
-  injection.
+The condition `1=1` always evaluates to true; thus the application logs in the
+attacker without a valid password.
 
-- Validate input strictly—use whitelist patterns or types.
+**Other classic payloads:**
 
-- Run databases under least-privileged accounts.
+- `1; DROP TABLE Users; --`
+- `' UNION SELECT username, password FROM Users --`
 
-### Cross‑Site Scripting (XSS)
+### Triggering SQL Injection in Practice
 
-XSS is a type of injection where malicious scripts are embedded into otherwise
-trusted websites. These scripts run in users’ browsers, enabling theft of
-session data, redirection, or other malicious behavior.
+- Vulnerable form fields (e.g., login, search, comment forms)
+- URL query string parameters
+- Hidden fields or poorly validated API payloads
+- Administrative interfaces
 
-Types of XSS:
+### Mitigation Strategies
 
-- Stored XSS: malicious script is persisted (e.g. in database), and executes
-  whenever the content is viewed.
+#### ASP.NET Core (Entity Framework/Core, Dapper, ADO.NET)
 
-- Reflected XSS: script is reflected in server response (e.g., via URL
-  parameters) and executes immediately on page load.
+1. **Use Parameterized Queries**: Never concatenate user input into SQL
+   statements.
+2. **Prefer ORM frameworks whenever possible (e.g., EF Core LINQ)**.
+3. **Validate and Sanitize Inputs**: Apply input validation for expected data
+   types, lengths, and safe character sets.
+4. **Principle of Least Privilege**: Database users should have minimal
+   privileges.
 
-- DOM-based XSS: script runs by manipulating DOM client-side, independent of
-  server sanitization.
+##### Safe Query with EF Core (Recommended)
 
-#### Mitigation Strategies
+```csharp
+// BAD: Vulnerable
+private IList<Book> SearchVulnerable(string title) {
+    return _context.Books.FromSqlRaw($"SELECT * FROM Books WHERE Title LIKE '%{title}%'").ToList();
+}
 
-- Contextual output encoding/escaping: apply appropriate escaping based on
-  context (HTML, JavaScript, CSS, URL).
+// GOOD: Safe
+private IList<Book> SearchSafe(string title) {
+    return _context.Books.Where(b => b.Title.Contains(title)).ToList();
+}
+```
 
-- Use frameworks that automatically encode data (e.g. Razor or Angular
-  interpolation).
+##### Safe Query with Dapper
 
-- Implement Content Security Policy (CSP) with nonces or hashes to restrict
-  allowed scripts.
+```csharp
+var query = "SELECT * FROM Books WHERE Title LIKE @SearchTerm";
+var books = connection.Query<Book>(query, new { SearchTerm = $"%{title}%" }).ToList();
+```
 
-### Cross‑Site Request Forgery (CSRF) / XSRF
+##### Safe Query with ADO.NET
 
-CSRF tricks a logged-in user's browser into making unwanted requests to a
-trusted site (like submitting a form) because the browser automatically includes
-authentication cookies—even if the request originates from an attacker site.
+```csharp
+var cmd = new SqlCommand("SELECT * FROM Users WHERE Username=@username AND Password=@password", connection);
+cmd.Parameters.AddWithValue("@username", username);
+cmd.Parameters.AddWithValue("@password", password);
+```
 
-Attacker crafts a hidden form, image tag, or script targeting a sensitive
-endpoint. When the victim visits the attacker’s page while authenticated to the
-trusted site, the harmful request executes automatically without user consent.
+##### Angular Frontend Considerations
 
-#### Mitigation Strategies
+- Never construct SQL queries or expose direct query interfaces in Angular.
+  Inputs from Angular forms should never become raw database queries.
 
-- Synchronizer Token Pattern: Embed a unique, server-generated token in each
-  HTML form and validate it on submission. This is the classic anti-forgery
-  token approach.
+##### Best Practices
 
-- Double Submit Cookie & Cookie-to-Header:
+- Use stored procedures for complex operations.
+- Apply input sanitization and strong validation.
+- Never log or display SQL errors to the user in production; use generic error
+  messages.
 
-  - Server sets a CSRF token cookie.
-  - JavaScript also reads the cookie and adds it to a custom header on AJAX
-    requests.
-  - Server verifies header matches the cookie.
+### Sample SQL Injection Mitigation in ASP.NET Core
 
-- SameSite Cookie Attribute: Tag session cookies with `SameSite=Lax/Strict` so
-  they aren't sent with cross-site requests, limiting CSRF exposure.
+```csharp
+public async Task<IActionResult> Login(string username, string password) {
+    var user = await dbContext.Users
+      .FirstOrDefaultAsync(u => u.Username == username && u.Password == password);
+    if (user != null)
+        return Ok("Login succeeded!");
+    else
+        return Unauthorized();
+}
+```
 
-### Distributed Denial of Service (DDoS)
+_Note: Passwords should be hashed and not stored in plaintext; use Identity for
+authentication._
 
-A DDoS attack is when a network or application is flooded with overwhelming
-traffic from multiple, distributed sources, often compromised devices or
-botnets, to exhaust resources and deny service to legitimate users.
+### Interview Questions: SQL Injection
 
-#### Mitigation Strategies
+#### What is SQL Injection, and how does it work?
 
-- Rate Limiting: Throttle requests per IP or client (e.g. 100 req/min per IP) to
-  protect against floods and API abuse.
-- Firewalls & WAF: Block known malicious IPs, filter Layer 7 patterns, and
-  inspect HTTP traffic to stop attack vectors targeting web applications.
-- CDN: Consider third-party providers like Cloudflare, Akamai, AWS Shield, or
-  others for global-scale absorption and mitigation. These services offer
-  protective layers capable of handling attacks in Tbps scale.
+An attacker inserts malicious SQL into application queries due to improper input
+handling, leading to unauthorized data access or database compromise.
+
+#### How can parameterized queries prevent SQL Injection?
+
+They treat user input strictly as data, not SQL code, blocking attempts to alter
+query structure.
+
+#### How does EF Core mitigate SQL Injection?
+
+EF Core uses LINQ-to-Entities and parameterized queries under the hood.
+
+---
+
+## Cross-Site Scripting (XSS)
+
+### How XSS Works
+
+**Cross-Site Scripting (XSS)** vulnerabilities allow attackers to inject
+malicious scripts (often JavaScript) into content that users will view in their
+browsers. Three main types exist:
+
+1. **Reflected XSS:** Input is immediately reflected in output (such as query
+   strings).
+2. **Stored XSS:** Malicious data is saved to the database and displayed to all
+   users.
+3. **DOM-based XSS:** Unsafe client-side code introduces tainted values into the
+   page.
+
+Consequences include theft of session cookies, defacement, or running arbitrary
+code in the user’s browser.
+
+### Triggers in Practice
+
+- Unescaped output of user input in HTML, attributes, or JavaScript contexts.
+- Rendering unsafe HTML using Angular’s `[innerHTML]`.
+- Accepting and redisplaying comments or user-created content as HTML.
+
+### Mitigation Strategies in Angular and ASP.NET Core
+
+#### Angular
+
+- **Automatic Escaping:** Angular interpolations (`{{myValue}}`) auto-escape
+  variable content.
+- **Sanitization:** All bindings, including `[innerHTML]`, go through Angular’s
+  sanitizer.
+- **DomSanitizer:** Handles trusted content when needed, but can be dangerous if
+  misused.
+
+##### Demo: Safe Angular Interpolation
+
+```typescript
+@Component({
+  selector: "app-user",
+  template: `<div>{{ username }}</div>`,
+})
+export class UserComponent {
+  username = 'Alice <script>alert("XSS")</script>';
+}
+```
+
+_Output: `<div>Alice &lt;script&gt;alert("XSS")&lt;/script&gt;</div>`_
+
+##### Unsafe Use: `[innerHTML]` (potential risk)
+
+```typescript
+@Component({
+  template: `<div [innerHTML]="userComment"></div>`,
+})
+export class CommentComponent {
+  userComment = '<img src=x onerror="alert(1)">';
+}
+```
+
+Angular will sanitize and remove unsafe attributes, but be wary if using
+DomSanitizer’s bypass methods.
+
+##### Safe Use with DomSanitizer (only for trusted sources!)
+
+```typescript
+constructor(private sanitizer: DomSanitizer) {}
+safeHtml(html: string): SafeHtml {
+  return this.sanitizer.bypassSecurityTrustHtml(html); // Dangerous if misused!
+}
+```
+
+#### ASP.NET Core (Razor Pages, MVC & APIs)
+
+- **Automatic HTML Encoding:** Razor `@` syntax and TagHelpers encode by
+  default.
+- **Never use `HtmlString` or `Html.Raw()` on untrusted data.**
+- **Encode outputs in JavaScript, HTML, URLs and attributes.**
+
+##### Example: Razor Automatic Encoding
+
+```cshtml
+@{ var userInput = "<img src=x onerror='alert(1)' />"; }
+@userInput <!-- Output will be encoded -->
+```
+
+##### Output:
+
+```html
+&lt;img src=x onerror=&#39;alert(1)&#39; /&gt;
+```
+
+##### Passing Data to JavaScript Securely
+
+```cshtml
+<div id="data" data-userinput="@Model.Comment"></div>
+<script>
+  var comment = document.getElementById('data').dataset.userinput;
+  document.getElementById('output').innerText = comment; // Safe
+</script>
+```
+
+##### Content Security Policy (CSP)
+
+Implement CSP to restrict script sources:
+
+```csharp
+app.Use(async (context, next) => {
+  context.Response.Headers.Add("Content-Security-Policy", "default-src 'self'");
+  await next();
+});
+```
+
+### Interview Questions: XSS
+
+#### How does Angular help prevent XSS?
+
+Angular auto-escapes interpolated outputs and sanitizes bound HTML, URLs, and
+style attributes to prevent XSS. Unsafely bypassing these features introduces
+risk.
+
+#### How would you prevent XSS in ASP.NET Core apps?
+
+Never output untrusted data unencoded; always rely on framework encoding for
+HTML, attributes, JavaScript, and URLs.
+
+---
+
+## Cross-Site Request Forgery (CSRF)
+
+### How CSRF Works
+
+**Cross-Site Request Forgery (CSRF/XSRF)** tricks authenticated users into
+performing unintended actions on web apps where they’re logged in. Browsers
+automatically send cookies (like session tokens) with cross-origin requests,
+allowing attackers to piggyback on the user’s credentials via hidden forms or
+forged requests.
+
+**Example Real-World Attack:**  
+A user logs into their banking website. Then, while authenticated, visits a
+malicious site that has:
+
+```html
+<form action="https://bank.com/transfer" method="POST">
+  <input name="to" value="attacker" type="hidden" />
+  <input name="amount" value="10000" type="hidden" />
+  <input type="submit" />
+</form>
+<script>
+  document.forms[0].submit();
+</script>
+```
+
+Their browser sends the banking site's auth cookie, causing a transfer.
+
+### Trigger Conditions
+
+- Use of cookies for authentication.
+- State-changing endpoints (POST, PUT, DELETE) that do not check for CSRF
+  tokens.
+
+### Mitigation Strategies
+
+#### ASP.NET Core
+
+- **Antiforgery Tokens** are injected into HTML form elements with `<form
+method="post">` and validated server-side on each request.
+- **AutoValidateAntiforgeryToken** filter can be global for all unsafe HTTP
+  methods.
+
+##### Example: Enabling Global Anti-CSRF
+
+```csharp
+builder.Services.AddControllersWithViews(options => {
+    options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());
+});
+```
+
+##### In Razor Form:
+
+```cshtml
+<form asp-action="Update" method="post">
+    @Html.AntiForgeryToken()
+    <!-- form fields -->
+</form>
+```
+
+##### Manual Token Injection for APIs
+
+- Expose the antiforgery token as a cookie (e.g., XSRF-TOKEN).
+- Require clients (Angular) to send as a header.
+
+```csharp
+builder.Services.AddAntiforgery(options => {
+    options.HeaderName = "X-XSRF-TOKEN";
+});
+```
+
+##### Controller Validation
+
+```csharp
+[HttpPost]
+[ValidateAntiForgeryToken]
+public IActionResult Update(ProfileModel model) { ... }
+```
+
+#### Angular
+
+- Detects the XSRF-TOKEN cookie and sends its value in the `X-XSRF-TOKEN` header
+  for all mutating requests (`POST`, `PUT`, etc.).
+
+```typescript
+this.http.post("/api/secure", payload); // Angular automatically includes header if XSRF-TOKEN cookie is present
+```
+
+##### Custom Header/Cookie Names
+
+```typescript
+import { provideHttpClient, withXsrfConfiguration } from "@angular/common/http";
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideHttpClient(
+      withXsrfConfiguration({
+        cookieName: "MY_APP_TOKEN",
+        headerName: "X-My-Header",
+      })
+    ),
+  ],
+};
+```
+
+##### SPA and JWT Consideration
+
+If tokens (JWT) are stored in browser local storage and sent in `Authorization`
+headers, CSRF is less of a risk, since browser does not attach those to
+cross-origin requests.
+
+### Interview Questions: CSRF
+
+#### How does ASP.NET Core mitigate CSRF in traditional and SPA scenarios?
+
+By using antiforgery tokens in forms and requiring them for unsafe state
+changes. For APIs, tokens can be placed in cookies and headers for client
+verification.
+
+#### How does Angular integrate CSRF protection with ASP.NET Core APIs?
+
+Angular reads a cookie called XSRF-TOKEN (or similar) and automatically includes
+it as a header so ASP.NET can validate the request's origin.
+
+---
+
+## Broken Authentication and Session Management
+
+### How This Attack Works
+
+**Broken authentication** occurs when session tokens, passwords, or identity
+info can be guessed, intercepted, or brute-forced due to application weaknesses.
+This includes:
+
+- Storing passwords in plaintext,
+- Insecure session tokens (predictable, not expired, too permissive),
+- Not enforcing logouts or session expiration,
+- Poor password policies.
+
+**Session hijacking** is a related risk, where attackers steal or predict
+session cookies/tokens.
+
+### Triggers
+
+- Weak or no password requirements.
+- Exposure of session IDs in URLs.
+- Session timeout set too long or absent.
+- No or insecure Multi-Factor Authentication (MFA).
+
+### Mitigation Strategies
+
+#### ASP.NET Core
+
+- **Use ASP.NET Core Identity** for robust authentication and password hashing
+  (bcrypt/PBKDF2).
+- **Implement MFA** (use authenticator apps or SMS/Email).
+- **Short session lifetimes** for sensitive endpoints; require
+  re-authentication.
+- **Set secure, HttpOnly, and SameSite attributes** on session cookies.
+
+##### Password Policy in Startup
+
+```csharp
+services.Configure<IdentityOptions>(options => {
+    options.Password.RequireDigit = true;
+    options.Password.RequiredLength = 8;
+    options.Password.RequireNonAlphanumeric = true;
+    options.Password.RequireUppercase = true;
+    options.Password.RequireLowercase = true;
+});
+```
+
+##### JWT Example
+
+```csharp
+services.AddAuthentication(options => {
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+}).AddJwtBearer(options => {
+    options.TokenValidationParameters = new TokenValidationParameters {
+      // ...
+    };
+});
+```
+
+- **Invalidate JWTs on logout or after compromise.**
+
+#### Angular
+
+- Never store tokens in localStorage/sessionStorage for sensitive apps – prefer
+  HTTP-only, Secure cookies.
+- Implement token refresh/short expiration.
+- Use guards and interceptors to force re-auth as needed.
+
+##### Example Angular Service (Token in Memory)
+
+```typescript
+@Injectable({ providedIn: "root" })
+export class AuthService {
+  private token: string;
+  setToken(token: string): void {
+    this.token = token;
+  }
+  getToken(): string {
+    return this.token;
+  }
+}
+```
+
+### Interview Questions: Broken Authentication
+
+#### Explain the difference between authentication and authorization.
+
+Authentication verifies user identity; authorization determines allowed actions
+for authenticated users.
+
+#### What are secure password storage techniques?
+
+Use strong hashes (bcrypt, PBKDF2), per-user salt, and never store plaintext.
+
+---
+
+## Insecure Direct Object References (IDOR)
+
+### How IDOR Works
+
+Insecure Direct Object Reference occurs when the client can directly specify an
+object identifier (such as a numeric ID) to access resources, _without_ proper
+server-side checks for ownership or permissions. Attackers exploit this by
+manipulating IDs in URLs or requests to access or modify others’ data.
+
+**Example:**  
+`GET /api/invoice?id=1003` (legitimate user’s invoice)  
+A malicious user tries `/api/invoice?id=1004` and sees someone else’s invoice.
+
+### Mitigation Strategies
+
+- Always verify ownership before serving vulnerable resources.
+- Use indirect references (e.g., UUIDs or tokens) instead of raw IDs when
+  possible.
+- Enforce authorization checks in _every_ endpoint.
+
+#### ASP.NET Core: Secure Query Example
+
+```csharp
+[Authorize]
+public IActionResult GetInvoice(int id) {
+    var invoice = dbContext.Invoices.FirstOrDefault(i => i.Id == id && i.UserId == UserId);
+    if (invoice == null) return Forbid();
+    return Ok(invoice);
+}
+```
+
+- Enforce `[Authorize(Roles = "Admin")]` for privileged routes.
+- Use claims or resource-based policies for fine-grained authorization.
+
+#### Angular Considerations
+
+- Never rely on hiding UI elements to enforce access (always enforce on
+  backend).
+- Make client-side IDs non-predictable if possible.
+
+### Interview Questions: IDOR
+
+#### What is an IDOR vulnerability?
+
+It’s when a user can access or modify protected objects by directly referencing
+their identifiers, due to missing server-side access control.
+
+---
+
+## Security Misconfiguration
+
+### How it Happens
+
+Security misconfigurations are accidental exposures resulting from mistakes like
+using default accounts, over-privileged permissions, unnecessary services,
+verbose error messages, or missing headers.
+
+**Common examples:**
+
+- Leaving stack traces and detailed exceptions enabled in Production.
+- Exposing admin endpoints to the public.
+- Failing to set security HTTP headers (CSP, HSTS, X-Frame-Options, etc.).
+
+### Mitigation Strategies
+
+- **Automate deployment with rigorous configuration management.**
+- **Set secure HTTP headers via middleware**:
+
+```csharp
+app.UseSecurityHeaders(); // e.g., using NetEscapades.AspNetCore.SecurityHeaders
+```
+
+- **Disable detailed errors in production:**
+
+```csharp
+if (!env.IsDevelopment()) {
+    app.UseExceptionHandler("/Error");
+}
+```
+
+- Use strong security headers: X-Frame-Options, X-Content-Type-Options,
+  Strict-Transport-Security, CSP, etc.
+
+#### Angular Best Practices
+
+- Remove unused dependencies.
+- Keep Angular and all libraries up to date.
+- Regularly run `ng update` and address breaking changes or security issues.
+
+### Interview Questions: Security Misconfiguration
+
+#### Why are security headers important?
+
+They enforce browser security policies to block clickjacking, XSS, and other
+attacks at the client.
+
+---
+
+## Sensitive Data Exposure
+
+### How Exposure Occurs
+
+**Sensitive Data Exposure** means attackers can access or intercept credentials,
+financial, personal, or confidential data due to poor protection. Causes include
+lack of HTTPS, weak cryptography, plaintext storage, or logging sensitive
+details.
+
+### Mitigation Strategies
+
+- Always use HTTPS with strong certificates and HSTS.
+- Encrypt sensitive fields at rest and in transit.
+- Never log passwords or secrets.
+- Use proven frameworks for password storage (e.g., ASP.NET Core Identity).
+
+#### Enforcing HTTPS in ASP.NET Core
+
+```csharp
+if (!app.Environment.IsDevelopment()) {
+    app.UseHttpsRedirection();
+    app.UseHsts();
+}
+```
+
+#### Encrypt Values at Rest
+
+- Use DPAPI/Data Protection API for keys.
+- Hash and salt passwords (`PasswordHasher<TUser>` in Identity).
+
+#### Angular Security
+
+- Always use HTTPS endpoints (enforced by server and client-side interceptors).
+- Never expose sensitive data (tokens, credentials) to the DOM or logs.
+- Use secure cookies for tokens when possible.
+
+### Interview Questions: Sensitive Data Exposure
+
+- **Q:** What is the most effective way to protect sensitive data in
+  transmission?
+- **A:** Enforce HTTPS for all communications; set up HSTS.
+
+---
+
+## Components with Known Vulnerabilities
+
+### How This Occurs
+
+Modern applications heavily rely on third-party dependencies (NuGet for .NET,
+npm for Angular). If outdated or unmaintained packages are present, you inherit
+their vulnerabilities.
+
+**Attackers use CVE databases to scan for packages with known issues.**
+
+### Mitigation Strategies
+
+- Regularly audit dependencies (use tools like `dotnet list package
+--vulnerable` or `npm audit`).
+- Monitor and patch quickly when CVEs are published.
+- Prefer actively maintained libraries. Remove or replace abandoned ones.
+
+#### Example: Auditing Vulnerabilities
+
+- **.NET:**  
+  `dotnet list package --vulnerable --include-transitive`
+- **Angular (npm):**  
+  `npm audit`  
+  `npx npm-force-resolutions` for forced updates
+
+- Use services and plugins like Snyk, Dependabot for automated updates.
+
+### Interview Questions: Component Vulnerabilities
+
+#### How do you ensure the security of your third-party dependencies?
+
+Regular tool-based scanning and timely patching; remove unused/outdated
+packages.
+
+---
+
+## Denial-of-Service (DoS) and Rate Limiting
+
+### Attack Mechanism
+
+Denial-of-Service attacks consume server resources by sending excessive
+requests, making the app unresponsive to legitimate users. Distributed DoS
+(DDoS) uses many clients to amplify the effect.
+
+**Other DoS vectors:** Unrestricted file uploads, expensive database queries,
+etc.
+
+### Mitigation Strategies
+
+#### ASP.NET Core
+
+- **Rate Limiting Middleware (built-in as of .NET 7/8):**
+
+```csharp
+builder.Services.AddRateLimiter(options => {
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(
+        httpContext => RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions {
+                PermitLimit = 100,
+                Window = TimeSpan.FromMinutes(1)
+            }));
+});
+app.UseRateLimiter();
+```
+
+- Assign per-user/IP/API-key quotas.
+- Use a WAF or a cloud DDoS protection service for DDoS-scale threats.
+
+#### Angular
+
+- Implement client-side rate limiting/interceptors to encourage responsible API
+  use.
+- Use RxJS `debounceTime` and `throttleTime` to limit request bursts for
+  search/autocomplete.
+
+##### Debouncing API Calls in Angular
+
+```typescript
+import { Subject } from 'rxjs';
+import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+
+searchTerms = new Subject<string>();
+
+ngOnInit() {
+  this.results$ = this.searchTerms.pipe(
+    debounceTime(400),
+    distinctUntilChanged(),
+    switchMap(term => this.apiSearch(term))
+  );
+}
+```
+
+### Interview Questions: DoS/Rate Limiting
+
+#### How would you throttle login attempts to prevent brute-force attacks?
+
+Set a per-IP/user rate limit for login endpoints at the API server.
+
+---
+
+## Path Traversal and File Upload Vulnerabilities
+
+### How the Attack Works
+
+**Path Traversal** exploits occur when user input is used to construct file
+paths, allowing access to files outside intended directories via sequences like
+`../../etc/passwd`.
+
+**File upload vulnerabilities** occur if user-provided files are not validated
+for type/size/location, leading to executable, malware, or oversized files being
+stored on the server.
+
+### Mitigation Strategies
+
+#### ASP.NET Core Path Traversal Prevention
+
+- Always validate and sanitize file names.
+- Use Path.Combine with a fixed base directory, and verify resolved paths remain
+  in base directory.
+- Disallow ‘..’, absolute paths, or path separators from input.
+
+##### Example: Path Sanitization
+
+```csharp
+string uploads = Path.Combine(_env.ContentRootPath, "uploads");
+string safeFileName = Path.GetFileName(userProvidedName);
+string fullPath = Path.Combine(uploads, safeFileName);
+
+if (!fullPath.StartsWith(uploads)) {
+    // Potential path traversal!
+    return BadRequest();
+}
+```
+
+#### File Upload Security
+
+- Restrict accepted content-types/extensions.
+- Set size limits.
+- Store files outside web root or use randomized file names.
+- Scan uploaded files with antivirus.
+- Never accept/expose user-supplied paths.
+
+##### Angular Example: File Upload Validation
+
+```typescript
+<input type="file" [accept]="'.png,.jpg'" (change)="onFileSelected($event)">
+```
+
+`onFileSelected($event)` should further check file.type and file.size before
+upload.
+
+### Interview Questions: Path Traversal/File Upload
+
+#### How would you prevent users from accessing arbitrary files?
+
+Always sanitize and validate the file path; resolve, normalize, and check it
+remains within the allowed directory.
+
+---
+
+## Security Logging and Monitoring
+
+### Importance
+
+Security logs enable detection of suspicious behaviors (e.g., brute-force
+attempts, data exfiltration, anomalous API use), and provide audit trails for
+incident response.
+
+### Implementation
+
+#### ASP.NET Core
+
+- Use **Serilog**, **log4net**, or **built-in ILogger** for structured logs.
+- Log all authentication attempts, critical errors, unexpected inputs, admin
+  actions, and system events.
+- Secure logs against tampering and limit access.
+
+##### Sample Serilog Setup
+
+```csharp
+Log.Logger = new LoggerConfiguration().WriteTo.Console().CreateLogger();
+builder.Services.AddSerilog();
+app.UseSerilogRequestLogging(); // Logs HTTP requests
+```
+
+Scope logs with context:
+
+```csharp
+logger.LogInformation("User {UserId} performed action {Action}", userId, action);
+```
+
+Send critical log entries to centralized SIEM or monitoring.
+
+#### Angular
+
+- Implement interceptors to log all API errors.
+- Log and monitor key user interactions for anomaly detection.
+- Consider sending logs to backend for aggregation and alerting.
+
+##### Angular Service Example
+
+```typescript
+@Injectable({ providedIn: 'root' })
+export class LoggingService {
+  logActivity(activity: string) { ... }
+}
+```
+
+### Interview Questions: Logging & Monitoring
+
+#### What levels of logging are important for security?
+
+Error, Warning (potential issues), Info (usage trace); Debug/Trace levels for
+investigating incidents (avoid sensitive data).
 
 ---
 
