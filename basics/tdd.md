@@ -286,6 +286,95 @@ user-value alignment.
 
 ---
 
+## Interview Questions
+
+### In TDD, is it always best to strictly follow “write tests first” before writing code? Why or why not?
+
+Strict TDD enforces writing tests before code, which helps clarify requirements
+and ensures test coverage. However, in real-world senior practice, there are
+exceptions — for example:
+
+- When requirements are unclear (you’d risk writing throwaway tests).
+- When dealing with highly experimental or UI-heavy features where the design
+  changes rapidly. In such cases, I may spike the implementation first, then
+  write tests retroactively once the design stabilizes. The key is that tests
+  remain **first-class citizens**, even if sequence adapts.
+
+### How can TDD lead to over-engineering or over-testing, and how do you prevent it?
+
+Writing a test for every trivial getter/setter leads to brittle and noisy test
+suites. As a senior engineer, I focus on **behavioral testing** — validating
+_observable outcomes_ and _business rules_, not private implementation details.
+I also enforce “**test value, not coverage**”: a low-value test that locks in
+internal design is a maintenance cost.
+
+### What’s the biggest mistake you’ve seen teams make with TDD?
+
+Treating TDD as a religion rather than a tool — writing excessive, low-value
+tests and slowing velocity without improving design. Another is skipping
+**refactoring** after the Green step; without it, TDD produces the same
+spaghetti code, just covered in tests.
+
+### Explain the difference between a mock, a stub, and a fake with real-world examples.
+
+- **Stub** → Pre-programmed data provider, no behavior verification. Example: an
+  `IWeatherService` returning fixed “sunny” data for tests.
+- **Mock** → Like a stub but also verifies **interaction**. Example: verifying
+  `IEmailService.SendEmail()` was called once with correct subject.
+- **Fake** → Lightweight, working but simplified version of a dependency.
+  Example: in-memory DB instead of SQL Server in tests. The key: stubs are for
+  _input_, mocks are for _interaction_, fakes are for _infrastructure
+  replacement_.
+
+### When would you prefer a fake over a mock in .NET Core?
+
+If I want to simulate realistic behavior without heavy mocking frameworks, or
+when the dependency has significant complexity — e.g., using `InMemoryDbContext`
+in EF Core integration-like unit tests. This lets me test more logic without
+spinning up actual infrastructure.
+
+### How do you keep a large test suite maintainable?
+
+- **Use builders and factories** for common object creation to avoid brittle
+  setup code.
+- Group tests by **behavior, not class name**.
+- Delete or refactor low-value tests.
+- Keep test naming explicit:
+  `"PlaceOrder_Should_SendConfirmationEmail_When_OrderIsValid"`.
+- Parallelize test execution and isolate dependencies to keep runs fast.
+
+### What’s your strategy for testing private methods?
+
+I rarely test them directly. I test **public behavior** that exercises them. If
+a private method is complex enough to require direct testing, that’s a design
+smell — it likely belongs in another class where it can be tested as a public
+method.
+
+### In ASP.NET Core with xUnit, how do you test middleware or filters?
+
+- For middleware: use `TestServer` from `Microsoft.AspNetCore.TestHost` to
+  simulate HTTP requests and assert on responses or headers.
+- For filters: instantiate the filter with mocks/stubs for dependencies, call
+  `OnActionExecuting()` or `OnActionExecuted()` manually, then verify side
+  effects.
+
+### In Angular, when would you choose Jest over Karma/Jasmine for unit testing?
+
+Jest is faster (runs in Node, no browser spin-up), simpler to configure, and has
+built-in mocking tools. Karma/Jasmine is better if you need a real browser
+environment or integration with legacy Angular CLI setups. For large enterprise
+Angular apps, I often move to Jest for speed.
+
+### What’s your approach to mocking HttpClient in Angular unit tests?
+
+- With **Jasmine/Karma**, use `HttpClientTestingModule` and
+  `HttpTestingController` to intercept requests and provide mock responses.
+- With **Jest**, I can still use `HttpClientTestingModule` or create a simple
+  Jest mock of `HttpClient.post/get`. This ensures no actual HTTP calls happen
+  and responses are predictable.
+
+---
+
 ## xUnit Core Features
 
 ### xUnit Attributes and Assertions
