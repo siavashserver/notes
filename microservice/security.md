@@ -2,6 +2,372 @@
 title: Security
 ---
 
+## Hashing Methods
+
+Hash functions are mathematical algorithms that transform an input of arbitrary
+length into a fixed-size output, known as a hash value or digest. The process is
+fundamentally one-way—meaning it is computationally infeasible to reverse the
+hash and retrieve the original input.
+
+Hashing is distinct from encryption, serving purposes of data integrity and
+authentication rather than confidentiality. Hashes are integral for digital
+signatures, password storage, file integrity verification, and blockchain record
+linking.
+
+| Algorithm | Year Introduced | Digest Size             | Construction    | Rounds | Collision Resistance | Status                 | Common Use Cases                             |
+| --------- | --------------- | ----------------------- | --------------- | ------ | -------------------- | ---------------------- | -------------------------------------------- |
+| MD5       | 1992            | 128 bits                | Merkle–Damgård  | 64     | Broken               | Deprecated             | Legacy file integrity (non-secure)           |
+| SHA-1     | 1995            | 160 bits                | Merkle–Damgård  | 80     | Broken (since 2017)  | Deprecated             | Legacy HMAC, non-critical integrity          |
+| SHA-2     | 2001            | 224, 256, 384, 512 bits | Merkle–Damgård  | 64/80  | Strong               | Recommended            | SSL/TLS, digital signatures, PGP, blockchain |
+| SHA-3     | 2015            | 224, 256, 384, 512 bits | Sponge (Keccak) | 24     | Strong               | Recommended            | Emerging cryptography, SHA-2 alternative     |
+| bcrypt    | 1999            | 192 bits                | Blowfish-based  | N/A    | Memory/cost tunable  | Recommended (password) | Password hashing (with salt, slow)           |
+| scrypt    | 2009            | Variable                | Memory-hard     | N/A    | Memory/cost tunable  | Recommended (password) | Password hashing (high memory usage)         |
+| Argon2    | 2015            | Variable                | Memory-hard     | N/A    | Memory/cost tunable  | Recommended (password) | Password hashing (current best)              |
+
+_Table based on common cryptographic literature, NIST publications, and security
+best practices._
+
+### MD5
+
+MD5 was once the standard for generating fast file checksums and storing hashed
+passwords. It produces a 128-bit digest and is simple, fast, and widely
+supported. However, since the early 2000s, practical collision attacks have been
+demonstrated, allowing attackers to construct two distinct inputs sharing the
+same hash. MD5 is therefore considered cryptographically broken: it is
+unsuitable for any application requiring defense against malicious tampering or
+attackers—for example, digital signatures, certificates, or password storage.
+
+In its day, MD5’s main advantages were speed and implementation simplicity.
+Today, its use is restricted to non-security-critical file integrity checks
+where accidental corruption is the main concern, not attacker manipulation.
+
+### SHA-1
+
+SHA-1, the first widely adopted member of the Secure Hash Algorithm family,
+produces a 160-bit digest and employs a similar Merkle–Damgård structure as MD5.
+In 2017, the “SHAttered” attack demonstrated the first practical collision, and
+subsequent computational advancements lowered the cost of generating SHA-1
+collisions to practical levels. As a result, SHA-1 is now considered deprecated
+for all cryptographic security purposes, and organizations like Google and
+Mozilla have retired SHA-1-signed digital certificates.
+
+Transparency mandates that systems still using SHA-1 (for example, in legacy
+HMACs) migrate to newer, more resilient algorithms as soon as possible.
+
+### SHA-2 (SHA-224, SHA-256, SHA-384, SHA-512)
+
+SHA-2 is a family of algorithms producing digests of various lengths up to 512
+bits. The most widely deployed is SHA-256, which is the backbone for TLS
+certificates, blockchain technologies (such as Bitcoin), software signing, and
+modern digital signatures. SHA-2 addresses previous vulnerabilities in SHA-1 and
+currently suffers from no known practical weaknesses. It is considered the
+best-in-class choice for most cryptographic integrity scenarios, barring very
+specific requirements for post-quantum or ultra-long-term security needs.
+
+### SHA-3
+
+SHA-3, standardized in 2015, is based on the Keccak sponge construction,
+offering resistance to length-extension attacks and flexible digest lengths.
+SHA-3 provides an orthogonal security design compared to SHA-2 and serves as a
+backup in the cryptographic community in case any weaknesses are discovered in
+SHA-2. While its adoption is less widespread, it is particularly valued in
+contexts demanding diversity of cryptographic primitives or higher attack
+resistance requirements.
+
+### Modern Password Hashing: bcrypt, scrypt, Argon2
+
+General-purpose hashing algorithms like SHA-2 are not suitable for password
+storage due to their speed—attackers can brute-force billions of hashes per
+second with consumer hardware. Secure systems instead use slow,
+resource-intensive password hashing schemes:
+
+- **bcrypt**: Incorporates a salt and work factor/cost parameter, based on
+  Blowfish. It is well-tested, widely available, but memory usage is fixed and
+  limited.
+- **scrypt**: Adds both memory and CPU _hardness_, making attacks using GPUs or
+  ASICs uneconomical.
+- **Argon2**: Winner of the 2015 Password Hashing Competition. The current gold
+  standard for password hashing, Argon2id balances memory/cost with defense
+  against both GPU attacks and side-channel leaks. All exploit built-in unique
+  salts for each password, ensuring the same password never hashes to the same
+  output twice.
+
+### Hashing in Practice
+
+Hashing is used in password storage—servers store only the hash (and salt).
+During authentication, the user’s password is hashed with the same salt and
+compared to the stored value. Even if the server’s database is compromised,
+hashes are computationally difficult to reverse. Modern systems layer salts,
+slow algorithms, and sometimes “pepper” (a secret application-wide value) for
+additional security.
+
+Hashes are also used for:
+
+- **Data integrity verification**: After downloading software, users compare
+  computed hash values (e.g., SHA-256) with published values to confirm
+  integrity.
+- **Digital signatures**: The sender hashes a message and signs the hash with a
+  private key. The recipient verifies both integrity (using the hash) and
+  authenticity (via the public key).
+- **Blockchains**: Cryptographic hashes link transaction blocks and validate
+  state.
+- **Message authentication codes (HMACs)**: Combine a secret key and a hash
+  algorithm for tamper-proof message authentication.
+
+### Security Weaknesses and Attacks
+
+Hash function attacks commonly include:
+
+- **Collision attacks**: Find two different inputs with the same hash (fatal for
+  digital signatures).
+- **Preimage attacks**: Attempt to reverse a hash (currently infeasible for
+  SHA-2/3).
+- **Rainbow tables**: Precomputed databases for reversing unsalted hashes (beat
+  by salting).
+- **Brute-force/dictionary attacks**: Try popular guesses; mitigated by slow,
+  salted hashes and password policies.
+
+### Interview Questions
+
+#### What is the difference between hashing and encryption?
+
+Hashing is a one-way, irreversible process that converts data into a fixed-size
+digest. Its primary purpose is data integrity and verification. Encryption is a
+two-way, reversible process that transforms plaintext into ciphertext using a
+key, and only someone with the key can restore the plaintext. Encryption is
+designed to ensure data confidentiality, while hashing is for integrity and
+authentication.
+
+#### Why is MD5 considered insecure for cryptographic purposes?
+
+MD5 suffers from practical collision attacks, where attackers can generate two
+different inputs with the same hash value. Modern hardware can generate such
+collisions in seconds, allowing for digital signature forgery or malicious file
+substitution. Because of these weaknesses, MD5 is unsuitable for digital
+signatures, certificate signing, and password storage.
+
+#### What is salting, and why is it important in password hashing?
+
+Salting is the practice of adding a unique, random value to each password before
+hashing it. This ensures that identical passwords hash to different values,
+preventing attackers from using precomputed tables (rainbow tables) and making
+brute force attacks harder. Salting is critical for defending against bulk
+password compromise events and is implemented automatically in modern password
+hashing algorithms like bcrypt, scrypt, and Argon2.
+
+#### Why are slow, memory-hard algorithms (like Argon2, bcrypt) recommended for password storage?
+
+Unlike general-purpose hash functions (SHA-2), slow, memory-hard algorithms
+dramatically increase the time and resources required to compute or brute-force
+each hash. This thwarts attackers using GPUs and custom hardware, making
+large-scale password cracking economically and technologically impractical, even
+if the underlying hashes are leaked.
+
+---
+
+## Encryption Methods
+
+### Symmetric Encryption: Advanced Encryption Standard (AES)
+
+AES is the world’s most widely adopted symmetric (secret-key) block cipher. It
+operates on 128-bit data blocks, supports key sizes of 128, 192, and 256 bits,
+and executes a series of cryptographic operations (substitution, permutation,
+mixing, and key addition) over multiple rounds—10/12/14 for 128/192/256 bit
+keys, respectively. AES’s structure ensures both confusion (making the
+relationship between ciphertext and key complex) and diffusion (spreading
+plaintext bits widely).
+
+**Ciphertext** is the output you get when plaintext (readable data) is
+transformed by an encryption algorithm using a key (and, in some modes, an IV).
+
+AES replaced the older, insecure DES and 3DES due to its security and
+efficiency. Today, AES is embedded in hardware, software libraries, mobile
+devices, and is a standard for securing classified and highly sensitive data for
+governments worldwide.
+
+#### AES Usage Scenarios
+
+- **Data at rest**: Full-disk encryption software on laptops, cloud storage
+  volumes, mobile phones.
+- **Data in transit**: TLS (SSL), secure messaging protocols, VPN tunnels.
+- **Secure communication**: Wi-Fi WPA2/WPA3, messaging applications (WhatsApp,
+  Signal), disk/file encryption.
+- **Bulk data encryption**: Database encryption, backup tapes, data warehouses.
+
+#### AES Modes of Operation
+
+AES is a block cipher and requires a mode of operation for encrypting data
+streams or files:
+
+- **ECB (Electronic Code Book)**: Deprecated—identical plaintext blocks produce
+  identical ciphertext. Not secure for real data.
+- **CBC (Cipher Block Chaining)**: Adds randomness (IV), but vulnerable to
+  padding oracle attacks without authentication.
+- **GCM (Galois Counter Mode)**: Adds authentication (integrity) to encryption,
+  high throughput, default for modern TLS.
+- **CTR (Counter Mode), OFB, CFB**: Used in streaming or parallelized
+  environments.
+
+Best practice is to use AES-GCM or authenticated encryption modes for
+communication and storage.
+
+#### AES Encryption with IV — Step-by-Step Flow
+
+1. **Plaintext Input**: The original message or data you want to protect.
+
+2. **Key Selection**: A secret key (128, 192, or 256 bits) is chosen or
+   generated securely.
+
+3. **IV Generation**: A random 128‑bit block is created.
+
+   - Purpose: ensures that even if the same plaintext is encrypted twice with
+     the same key, the ciphertext will differ.
+   - This IV will be sent alongside the ciphertext.
+
+4. **Key Expansion**: The secret key is expanded into multiple round keys for
+   the AES rounds.
+
+5. **Initial Transformation**: The plaintext is combined with the IV (in modes
+   like CBC, CTR, GCM) before the first encryption step.
+
+6. **AES Rounds**:
+
+   - **SubBytes** → substitute each byte using the S‑box.
+   - **ShiftRows** → shift rows to mix data.
+   - **MixColumns** → mix columns for diffusion (skipped in final round).
+   - **AddRoundKey** → XOR with round key.
+
+7. **Ciphertext Output**: The encrypted data is produced.
+   - Sent together with the IV so the receiver can decrypt.
+
+### Asymmetric Encryption: RSA
+
+RSA (Rivest-Shamir-Adleman) is the foundational asymmetric key algorithm for
+public-key cryptography. RSA’s security is based on the computational difficulty
+of factoring the product of two large primes, known as the modulus. Key pairs
+consist of:
+
+- **Public key (n, e)**: Used for encryption or signature verification; openly
+  distributed.
+- **Private key (n, d)**: Used for decryption or signature creation; kept
+  secret.
+
+#### RSA in Practice
+
+- **Public key infrastructure**: Website certificates (HTTPS/TLS), secure email
+  (PGP/S/MIME), VPN handshakes, SSH keys.
+- **Key exchange**: With RSA, a symmetric session key is securely exchanged,
+  after which AES encrypts the session data.
+- **Digital signatures**: The sender hashes content, encrypts hash with their
+  private key; recipient uses the sender’s public key to verify authenticity and
+  integrity.
+
+**Key sizes** range from 2048 bits (current minimum standard, NIST) to 4096 bits
+or higher for high-security contexts. RSA decryption is slower than symmetric
+encryption, so RSA is seldom used for large data but rather for exchanging
+symmetric keys.
+
+**Digital signatures** leverage the reverse: the private key signs (encrypts the
+hash), and the public key verifies (decrypts). This provides both message
+integrity and authentication.
+
+---
+
+## Comparative Table: Cryptographic Method Use by Use Case
+
+| Scenario                       | Hashing or Encryption  | Algorithm Example       | Security Goal                  |
+| ------------------------------ | ---------------------- | ----------------------- | ------------------------------ |
+| Password Storage               | Hashing (salted, slow) | Argon2, bcrypt, scrypt  | Persistence, cannot recover    |
+| Email/IM Secure Transmission   | Encryption (hybrid)    | RSA/ECC + AES-GCM       | Private, end-to-end secrecy    |
+| Digital Signatures             | Hash+Encryption (sign) | SHA-256 + RSA/ECDSA     | Integrity, authenticity        |
+| File Integrity Verification    | Hashing                | SHA-2, SHA-3            | Detect tampering or error      |
+| Blockchain Transaction Linking | Hashing                | SHA-256                 | Non-repudiable record chain    |
+| Disk/Database Encryption       | Encryption (symmetric) | AES-256                 | Protect at-rest information    |
+| Secure Web (HTTPS, TLS)        | Hybrid                 | ECDHE+AES-GCM           | Confidentiality, PFS           |
+| Backup Tape/Cloud Storage      | Encryption (symmetric) | AES                     | Protect against physical theft |
+| Secure VPN                     | Encryption (symmetric) | AES-256, ChaCha20       | Network confidentiality        |
+| IoT Device Communications      | ECC Encryption         | ECDH/ECDSA + AES/ChaCha | Efficient comms, small keys    |
+
+---
+
+## Security Best Practices
+
+### Best Practice Checklist for Hashing
+
+| Best Practice                        | Description                                                            |
+| ------------------------------------ | ---------------------------------------------------------------------- |
+| Use Strong Hash Functions            | Prefer SHA-256, SHA-3, bcrypt, Argon2                                  |
+| Salt Password Hashes Uniquely        | Each password + unique salt                                            |
+| Memory-Hard Algorithms for Passwords | Use Argon2, scrypt for brute-force defense                             |
+| Avoid MD5/SHA-1                      | Never use in new deployments                                           |
+| Audit Regularly                      | Identify and migrate away from deprecated                              |
+| Use HMAC for Authentication          | Secure message integrity with a secret HMAC                            |
+| Apply Layered Defense                | Combine hash methods with peppering/system-wide pepper stored securely |
+| Follow NIST and OWASP Guidance       | Maintain compliance and security rigor                                 |
+
+### Best Practice Checklist for Encryption
+
+| Best Practice                        | Description                                                         |
+| ------------------------------------ | ------------------------------------------------------------------- |
+| AES-256/GCM for Sensitive Data       | Authenticated encryption mode                                       |
+| RSA-2048/3072 or ECC-256+            | Public key infrastructure, digital signatures                       |
+| Key Management                       | Use HSM/vaults, rotate/retire keys regularly                        |
+| No Key Reuse                         | Use separate keys for encryption, signatures, etc.                  |
+| Secure Key Generation                | High-quality hardware RNG only                                      |
+| Encryption-in-Transit and At Rest    | Implement at file, disk, session, network levels                    |
+| Authentication and Integrity         | Use GCM, HMAC, digital signatures for all comms                     |
+| Avoid Custom/Non-standard Algorithms | Always standard, publicly-reviewed cryptography                     |
+| Stay Updated                         | Respond to new vulnerabilities, quantum transition                  |
+| Quantum-Safe Planning                | Identify and migrate long-lived assets to post-quantum where needed |
+
+### Key Management Best Practices
+
+- Keep strict inventory of all cryptographic keys.
+- Enforce least privilege access to keys (role-based controls).
+- Use automated, audited processes for key rotation, backup, and revocation.
+- Destroy obsolete keys securely (NIST SP 800-57 compliance).
+- Monitor and log all key accesses; respond promptly to signs of compromise.
+- Never store keys unencrypted or in application source code.
+
+### Interview Questions
+
+#### Describe the difference between symmetric and asymmetric encryption.
+
+Symmetric encryption uses a single shared key for both encryption and decryption
+(e.g., AES). Asymmetric encryption uses a key pair: a public key for encryption
+and a private key for decryption (e.g., RSA, ECC). Symmetric ciphers are
+typically much faster and used for bulk data, whereas asymmetric ciphers are
+used for key exchange, signatures, or limited small-data encryption due to their
+computational intensity.
+
+#### What is a digital signature, and how is it constructed?
+
+A digital signature is created by hashing a message and then encrypting the hash
+with the sender’s private key (using RSA or ECDSA). The recipient decrypts the
+signature with the sender’s public key and hashes the message. If the two hashes
+match, it confirms both the message’s authenticity (only the private key holder
+could have signed it) and its integrity (the content hasn’t changed). This
+provides non-repudiation, integrity, and authentication.
+
+#### How does AES encryption work? List at least three real-world use cases.
+
+AES processes 128-bit blocks through a series of substitution, permutation, and
+mixing rounds, using keys of 128, 192, or 256 bits. Each round transforms the
+data based on key-derived values, providing confusion and diffusion. Three
+real-world uses: (1) Disk encryption (BitLocker, FileVault); (2) Securing
+network communications (TLS/HTTPS, VPNs); (3) encrypting files in cloud storage
+(AWS S3, Google Cloud KMS).
+
+### What is the role of a Certificate Authority (CA) in public-key infrastructures?
+
+A Certificate Authority is a trusted third party that verifies and vouches for
+the ownership of public keys by issuing digital certificates. CAs bind public
+keys to entity identities (domains, organizations, persons). Web browsers and
+operating systems trust root CAs, enabling the trust model behind HTTPS, S/MIME,
+and code signing.
+
+---
+
 ## Common attack types
 
 ### SQL Injection
@@ -351,6 +717,15 @@ var result = await _userManager.CreateAsync(user, model.Password);
 // Always call APIs over HTTPS
 this.http.post("/api/login", credentials, { withCredentials: true });
 ```
+
+> `withCredentials`: This option primarily affects requests made to a different
+> origin (different protocol, domain, or port) than the Angular application is
+> served from. For same-origin requests, `withCredentials` has no effect as
+> credentials are sent by default. When `withCredentials: true` is used, the
+> server must explicitly allow credentials by including the
+> `Access-Control-Allow-Credentials: true` header in its response. If this
+> header is missing or set to false, the browser will block the response and a
+> CORS error will occur.
 
 #### Interview Questions
 
