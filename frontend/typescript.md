@@ -13,7 +13,7 @@ When you write `let a: number`, TypeScript enforces that only values of type
 runtime — it removes them in the compiled JS — but the compiler ensures type
 correctness before transpilation.
 
-```ts
+```typescript
 let age: number = 30;
 function greet(name: string): string {
   return `Hello, ${name}`;
@@ -36,7 +36,7 @@ Interfaces are erased at compile-time; they are purely a compile-time construct.
 Multiple interfaces with the same name merge their definitions (interface
 merging).
 
-```ts
+```typescript
 interface User {
   id: number;
   name: string;
@@ -46,13 +46,13 @@ interface User {
 const u: User = { id: 1, name: "Alice" };
 ```
 
-```ts
+```typescript
 interface Admin extends User {
   permissions: string[];
 }
 ```
 
-```ts
+```typescript
 interface Greeter {
   (name: string): string;
 }
@@ -74,7 +74,7 @@ multiple types without losing type information.
 | No compile-time checking | Enforces type constraints    |
 | Less readable contracts  | Self-documenting             |
 
-```ts
+```typescript
 function identity<T>(value: T): T {
   return value;
 }
@@ -82,7 +82,7 @@ function identity<T>(value: T): T {
 
 ### Generic Functions
 
-```ts
+```typescript
 function identity<T>(value: T): T {
   return value;
 }
@@ -93,7 +93,7 @@ let b = identity(42); // inferred as number
 
 ### Generic Interfaces
 
-```ts
+```typescript
 interface ApiResponse<T> {
   data: T;
   status: number;
@@ -107,7 +107,7 @@ const userResponse: ApiResponse<{ id: number; name: string }> = {
 
 ### Generic Classes
 
-```ts
+```typescript
 class Storage<T> {
   private items: T[] = [];
   add(item: T) {
@@ -126,7 +126,7 @@ numStore.add(1);
 
 Restrict what types can be used with a generic.
 
-```ts
+```typescript
 interface HasId {
   id: number;
 }
@@ -142,7 +142,7 @@ printId({ id: 5, name: "Test" }); // ✅
 
 Provide a fallback type if none is given.
 
-```ts
+```typescript
 function log<T = string>(value: T): void {
   console.log(value);
 }
@@ -152,7 +152,7 @@ log(); // defaults to string
 
 ### Multiple Type Parameters
 
-```ts
+```typescript
 function merge<A, B>(a: A, b: B): A & B {
   return { ...a, ...b };
 }
@@ -165,7 +165,7 @@ const merged = merge({ name: "Alice" }, { age: 30 });
 
 Work with specific keys of an object type.
 
-```ts
+```typescript
 function getProp<T, K extends keyof T>(obj: T, key: K): T[K] {
   return obj[key];
 }
@@ -176,7 +176,7 @@ getProp(user, "name"); // string
 
 ### Generics with Conditional Types
 
-```ts
+```typescript
 type ElementType<T> = T extends (infer U)[] ? U : T;
 type A = ElementType<string[]>; // string
 type B = ElementType<number>; // number
@@ -184,14 +184,14 @@ type B = ElementType<number>; // number
 
 ### Distributive Conditional Generics
 
-```ts
+```typescript
 type ExcludeType<T, U> = T extends U ? never : T;
 type Result = ExcludeType<string | number, number>; // string
 ```
 
 ### Generic Factory Functions
 
-```ts
+```typescript
 function create<T>(c: { new (): T }): T {
   return new c();
 }
@@ -199,7 +199,7 @@ function create<T>(c: { new (): T }): T {
 
 ### Generic Singleton Pattern
 
-```ts
+```typescript
 class Singleton<T> {
   private static instance: any;
   private constructor() {}
@@ -215,7 +215,7 @@ class Singleton<T> {
 Represent a set of **named constants**. Improves readability, enforces valid
 values, and reduces magic strings/numbers.
 
-```ts
+```typescript
 enum Direction {
   Up,
   Down,
@@ -227,7 +227,7 @@ enum Direction {
 - **Numeric enums** auto-increment: `Up = 0, Down = 1, ...`
 - **String enums** must have explicit values:
 
-```ts
+```typescript
 enum Role {
   Admin = "ADMIN",
   User = "USER",
@@ -245,7 +245,7 @@ enum Role {
 Control visibility of class members. Encapsulation — hide internal details from
 consumers.
 
-```ts
+```typescript
 class Car {
   private speed: number;
   protected brand: string;
@@ -267,7 +267,7 @@ modifiers pre-ES2022 private fields), but the compiler will block invalid usage.
 TypeScript also supports ES2022 `#private` fields, which are enforced at
 runtime:
 
-```ts
+```typescript
 class Test {
   #secret = 123;
 }
@@ -278,7 +278,7 @@ class Test {
 Let TS deduce the type without explicit annotation. Less boilerplate, still
 type-safe.
 
-```ts
+```typescript
 let x = 42; // inferred as number
 const y = "abc"; // inferred as string literal type
 ```
@@ -286,7 +286,7 @@ const y = "abc"; // inferred as string literal type
 In function parameters, TS never infers from usage — you must annotate if you
 want a type:
 
-```ts
+```typescript
 function greet(name) {} // name = any, unless noImplicitAny = true
 ```
 
@@ -297,7 +297,7 @@ Union is for _either/or_, Intersection is for _both_.
 **Union (`|`)** — value can be one of several types.
 **Intersection (`&`)** — combine multiple types into one.
 
-```ts
+```typescript
 let id: number | string;
 id = 123;
 id = "abc";
@@ -316,7 +316,7 @@ type Person = Name & Age; // must have both
 Tell TS _I know this is not null or undefined_. Useful when compiler can’t
 guarantee non-nullness but you can. If you’re wrong, runtime crash.
 
-```ts
+```typescript
 const el = document.getElementById("app")!;
 el.innerHTML = "Loaded!";
 ```
@@ -326,7 +326,7 @@ el.innerHTML = "Loaded!";
 Restrict variable to specific literal values. Good for finite config options or
 state machine states.
 
-```ts
+```typescript
 let role: "admin" | "user";
 role = "admin"; // ✅
 role = "guest"; // ❌
@@ -338,13 +338,13 @@ A **type-level if-else** — lets you create a type based on a condition.
 
 - If `T` is assignable to `U`, result is `X`, else `Y`.
 
-```ts
+```typescript
 T extends U ? X : Y
 ```
 
 ### Basic Example
 
-```ts
+```typescript
 type IsString<T> = T extends string ? "Yes" : "No";
 
 type A = IsString<string>; // "Yes"
@@ -353,7 +353,7 @@ type B = IsString<number>; // "No"
 
 ### With Generics
 
-```ts
+```typescript
 function processValue<T>(value: T): T extends string ? string[] : T[] {
   return (typeof value === "string" ? value.split("") : [value]) as any;
 }
@@ -366,7 +366,7 @@ const result2 = processValue(123); // number[]
 
 #### Type transformations
 
-```ts
+```typescript
 type ElementType<T> = T extends (infer U)[] ? U : T;
 type E1 = ElementType<string[]>; // string
 type E2 = ElementType<number>; // number
@@ -374,14 +374,14 @@ type E2 = ElementType<number>; // number
 
 #### Excluding or extracting
 
-```ts
+```typescript
 type NonString<T> = T extends string ? never : T;
 type Filtered = NonString<string | number | boolean>; // number | boolean
 ```
 
 #### Function overload behavior
 
-```ts
+```typescript
 type ReturnTypeIfString<T> = T extends string ? number : boolean;
 let example: ReturnTypeIfString<"abc">; // number
 ```
@@ -390,14 +390,14 @@ let example: ReturnTypeIfString<"abc">; // number
 
 - Conditional types **distribute** over unions:
 
-```ts
+```typescript
 type Dist<T> = T extends string ? "yes" : "no";
 type D = Dist<string | number>; // "yes" | "no"
 ```
 
 - Use parentheses to avoid:
 
-```ts
+```typescript
 type NoDist<T> = [T] extends [string] ? "yes" : "no";
 type ND = NoDist<string | number>; // "no"
 ```
@@ -406,13 +406,13 @@ type ND = NoDist<string | number>; // "no"
 
 Create new types by transforming **each property** in an existing type.
 
-```ts
+```typescript
 { [K in Keys]: NewType }
 ```
 
 ### Basic Example
 
-```ts
+```typescript
 interface User {
   id: number;
   name: string;
@@ -432,7 +432,7 @@ type StringifiedUser = Stringify<User>;
 - `?` → makes property optional
 - `-readonly` / `-?` → removes readonly/optional
 
-```ts
+```typescript
 type Optional<T> = { [K in keyof T]?: T[K] };
 type Readonly<T> = { readonly [K in keyof T]: T[K] };
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
@@ -440,7 +440,7 @@ type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
 ### With `keyof`
 
-```ts
+```typescript
 type Keys = keyof User; // "id" | "name"
 
 type Nullable<T> = { [K in keyof T]: T[K] | null };
@@ -450,7 +450,7 @@ type NullableUser = Nullable<User>;
 
 ### Key Remapping (`as`) _(TS 4.1+)_
 
-```ts
+```typescript
 type RenameKeys<T> = {
   [K in keyof T as `prefix_${string & K}`]: T[K];
 };
@@ -465,19 +465,19 @@ type PrefixedUser = RenameKeys<User>;
 
 - `Partial<T>`:
 
-  ```ts
+  ```typescript
   type Partial<T> = { [K in keyof T]?: T[K] };
   ```
 
 - `Omit<T, K>`:
 
-  ```ts
+  ```typescript
   type Omit<T, K extends keyof any> = Pick<T, Exclude<keyof T, K>>;
   ```
 
 #### Deep transformations
 
-```ts
+```typescript
 type DeepPartial<T> = {
   [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K];
 };
@@ -485,7 +485,7 @@ type DeepPartial<T> = {
 
 #### Dynamic API responses
 
-```ts
+```typescript
 type ApiResponse<T> = {
   [K in keyof T]: { value: T[K]; loaded: boolean };
 };
@@ -495,7 +495,7 @@ type ApiResponse<T> = {
 
 ### Make properties optional if they are functions
 
-```ts
+```typescript
 type OptionalFunctions<T> = {
   [K in keyof T]: T[K] extends Function ? T[K] | undefined : T[K];
 };
@@ -512,7 +512,7 @@ type Result = OptionalFunctions<Mixed>;
 
 ### Remove `null` only from string properties
 
-```ts
+```typescript
 type CleanStrings<T> = {
   [K in keyof T]: T[K] extends string | null ? string : T[K];
 };
@@ -613,7 +613,7 @@ Compiler, a superset of `tsc`).
 Make all properties in a type **optional**. Useful when updating objects — you
 might only pass some fields.
 
-```ts
+```typescript
 interface User {
   id: number;
   name: string;
@@ -631,7 +631,7 @@ updateUser(1, { email: "new@mail.com" });
 
 Make all properties in a type **required** (opposite of `Partial`).
 
-```ts
+```typescript
 interface User {
   id?: number;
   name?: string;
@@ -645,7 +645,7 @@ type StrictUser = Required<User>;
 Make all properties **immutable**. Helps enforce immutability in functional
 programming or Redux state.
 
-```ts
+```typescript
 interface User {
   id: number;
   name: string;
@@ -660,7 +660,7 @@ const u: Readonly<User> = { id: 1, name: "Alice" };
 Select a subset of properties from a type. Useful for DTOs or views with limited
 fields.
 
-```ts
+```typescript
 interface User {
   id: number;
   name: string;
@@ -675,7 +675,7 @@ type UserPreview = Pick<User, "id" | "name">;
 Create a type by excluding certain properties. Opposite of `Pick`. Useful when
 you want most but not all properties.
 
-```ts
+```typescript
 type UserWithoutEmail = Omit<User, "email">;
 ```
 
@@ -684,7 +684,7 @@ type UserWithoutEmail = Omit<User, "email">;
 Create an object type with keys `K` and values `T`. Useful for dictionary-like
 structures.
 
-```ts
+```typescript
 type Roles = "admin" | "user";
 type RolePermissions = Record<Roles, string[]>;
 
@@ -698,7 +698,7 @@ const perms: RolePermissions = {
 
 Remove from `T` all types assignable to `U`. Useful for filtering unions.
 
-```ts
+```typescript
 type Status = "active" | "inactive" | "deleted";
 type ActiveStatus = Exclude<Status, "deleted">; // "active" | "inactive"
 ```
@@ -707,7 +707,7 @@ type ActiveStatus = Exclude<Status, "deleted">; // "active" | "inactive"
 
 Keep only the types from `T` assignable to `U`.
 
-```ts
+```typescript
 type Status = "active" | "inactive" | "deleted";
 type RemovedStatus = Extract<Status, "deleted">; // "deleted"
 ```
@@ -716,7 +716,133 @@ type RemovedStatus = Extract<Status, "deleted">; // "deleted"
 
 Remove `null` and `undefined` from a type.
 
-```ts
+```typescript
 type MaybeString = string | null | undefined;
 type DefiniteString = NonNullable<MaybeString>; // string
+```
+
+---
+
+## Interview Questions
+
+### When would you use `unknown` instead of `any`, and what’s the difference?
+
+- **`any`** disables type checking completely — you can perform any operation
+  without compiler errors.
+- **`unknown`** is a safer alternative — you must first **narrow the type**
+  before using it.
+
+```typescript
+let value: any = 5;
+value.trim(); // OK at compile time, runtime error if not a string
+
+let val: unknown = "Hello";
+val.trim(); // ❌ Compile-time error
+if (typeof val === "string") {
+  val.trim(); // ✅ OK
+}
+```
+
+### If an interface extends a class, what does it inherit?
+
+It inherits **only the class's shape**, not its implementation. It also
+**inherits private/protected members**, meaning only subclasses can implement
+it.
+
+```typescript
+class Base {
+  protected id!: number;
+}
+
+interface MyInterface extends Base {
+  name: string;
+}
+
+class MyClass extends Base implements MyInterface {
+  name = "Test";
+}
+```
+
+### What are `const enums` and when to use them?
+
+`const enum` values are **inlined** at compile time for performance — no object
+is generated.
+
+```typescript
+const enum Directions {
+  Up,
+  Down,
+}
+let move = Directions.Up; // compiled to: let move = 0;
+```
+
+### Explain variance in TypeScript (covariance, contravariance)
+
+- **Covariant**: Can substitute a subtype where a supertype is expected (e.g.,
+  return types).
+- **Contravariant**: Function parameters accept supertypes of declared type.
+
+```typescript
+type Animal = { name: string };
+type Dog = { name: string; breed: string };
+
+let dogFn: (arg: Dog) => void;
+let animalFn: (arg: Animal) => void;
+
+dogFn = animalFn; // OK (contravariance on parameters is unsafe in strict mode)
+```
+
+### How does `keyof` behave with index signatures?
+
+```typescript
+type MyType = { [key: string]: number; a: number };
+type Keys = keyof MyType; // string | number
+```
+
+- With string index signatures, `keyof` produces `string | number` (since JS
+  object keys can be strings or symbols, and numeric keys are coerced to
+  strings).
+
+### `infer` keyword usage
+
+Used inside conditional types to extract a type.
+
+```typescript
+type ReturnTypeOf<T> = T extends (...args: any[]) => infer R ? R : never;
+
+type Foo = () => number;
+type Result = ReturnTypeOf<Foo>; // number
+```
+
+### TypeScript Narrowing Pitfall
+
+```typescript
+function process(val: string | number) {
+  if (typeof val === "string" && val.length > 5) {
+    // val is string here ✅
+  } else {
+    // val is still string | number ❌
+  }
+}
+```
+
+- Outside the `if`, TypeScript loses the narrowing.
+
+### Exhaustive Checking with `never`
+
+Ensures you know how to enforce type safety in unions.
+
+```typescript
+type Shape = { kind: "circle" } | { kind: "square" };
+
+function area(shape: Shape) {
+  switch (shape.kind) {
+    case "circle":
+      return 1;
+    case "square":
+      return 2;
+    default:
+      const _exhaustive: never = shape; // compile error if new case added
+  }
+}
 ```
