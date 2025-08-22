@@ -918,6 +918,361 @@ accordingly.
 
 ---
 
+# ConfigMaps, Secrets, and HashiCorp Vault Integration for ASP.NET Applications
+
+## ConfigMaps
+
+A **ConfigMap** in Kubernetes is an API object designed to store non-sensitive
+configuration data in the form of key-value pairs. Its primary purpose is to
+decouple static configuration from application code, supporting the "12-factor
+app" principle of separating configuration from binaries. ConfigMaps are used to
+provide environment variables, application properties, command-line arguments,
+or configuration files that an application can read at runtime, making it
+possible to build a single container image and deploy it in multiple
+environments (development, staging, production) with different configurations.
+
+Key characteristics of ConfigMaps:
+
+- Data is stored in plaintext (not encrypted, not base64-encoded by default).
+- They are **namespaced** objects.
+- ConfigMaps can be consumed by Pods as environment variables, configuration
+  files (via mounted volumes), or command-line arguments.
+- They are not suitable for sensitive data.
+
+### Creating ConfigMaps
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  app.name: MyApp
+  app.environment: production
+  app.version: "1.0.0"
+```
+
+```shell
+kubectl apply -f configmap.yaml
+```
+
+### Data Types Supported in ConfigMaps
+
+A ConfigMap’s `data` field is typically composed of string values, but you can
+store more complex structures like JSON, multi-line YAML, or even binaries via
+the `binaryData` field. For example:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-configmap
+data:
+  config.json: |
+    { "key": "value" }
+  myscript.sh: |
+    #!/bin/sh
+    echo "hello, world"
+binaryData:
+  logo.png: <base64-encoded-contents>
+```
+
+This flexibility supports a range of runtime configuration scenarios.
+
+### Consuming ConfigMaps in Pods
+
+ConfigMap data can be exposed to applications in several standard ways:
+
+#### 1. As Environment Variables
+
+- **Single Key Injection:**
+
+  ```yaml
+  env:
+    - name: APP_NAME
+      valueFrom:
+        configMapKeyRef:
+          name: app-config
+          key: app.name
+  ```
+
+- **All Keys via `envFrom`:**
+
+  ```yaml
+  envFrom:
+    - configMapRef:
+        name: app-config
+  ```
+
+- This is especially useful for apps expecting many configuration values as
+  environment variables.
+
+#### 2. As Mounted Files (Volumes)
+
+```yaml
+volumes:
+  - name: config-volume
+    configMap:
+      name: app-config
+      items:
+        - key: app.properties
+          path: app.properties
+containers:
+  - name: app-container
+    ...
+    volumeMounts:
+      - name: config-volume
+        mountPath: /etc/config
+        readOnly: true
+```
+
+- Each key becomes a file in the specified path; contents are the associated
+  value.
+
+#### 3. As Command-Line Arguments
+
+Configure the container command using values from environment variables, which
+may themselves be mapped from the ConfigMap.
+
+#### YAML Example – Full Pod Spec:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: configmap-example-pod
+spec:
+  containers:
+    - name: myapp-container
+      image: busybox
+      env:
+        - name: APP_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: app.name
+      volumeMounts:
+        - name: config-volume
+          mountPath: /etc/config
+          readOnly: true
+  volumes:
+    - name: config-volume
+      configMap:
+        name: app-config
+        items:
+          - key: app.properties
+            path: app.properties
+```
+
+### Dynamic Updates: ConfigMap Updates and Reloading Strategies
+
+- **Mounted Files**: When a ConfigMap is updated, the files within a Pod’s
+  mounted volume are eventually updated (within a few minutes, governed by
+  kubelet sync period and propagation delays). However, applications must watch
+  for filesystem changes (e.g., via `inotify` on Linux) to reload updated
+  configuration dynamically.
+- **Environment Variables**: Pods will _not_ detect updates to ConfigMaps when
+  injected as env vars. Pods must be restarted to pick up updated values.
+- **Immutability**: Starting with Kubernetes v1.21, ConfigMaps can be marked as
+  `immutable: true`. This disables edits, greatly improving safety, preventing
+  accidental updates, and boosting kube-apiserver performance for heavily used
+  clusters.
+
+---
+
+## Kubernetes Secrets
+
+A **Secret** is a Kubernetes object for securely storing sensitive information
+such as passwords, OAuth tokens, SSH keys, TLS certificates, or Docker registry
+credentials. Secrets are designed to prevent the exposure of sensitive
+information in Pod specs, container images, Git repositories, or logs.
+
+Key properties:
+
+- Values are **base64-encoded** (not encrypted by default).
+- Namespace-scoped, like ConfigMaps.
+- Can be injected into Pods as env vars or mounted as files (with 0400
+  permissions by default).
+- Kubernetes supports encryption-at-rest for Secret data in etcd but this must
+  be explicitly configured.
+
+### Types of Kubernetes Secrets
+
+Kubernetes ships with several built-in Secret types, each suitable for different
+scenarios.
+
+| Secret Type                         | Purpose / Contents                     |
+| ----------------------------------- | -------------------------------------- |
+| Opaque (default)                    | Arbitrary user-defined key-value pairs |
+| kubernetes.io/tls                   | TLS certs and private keys             |
+| kubernetes.io/dockerconfigjson      | Docker registry credentials            |
+| kubernetes.io/basic-auth            | Username/password for HTTP Basic Auth  |
+| kubernetes.io/ssh-auth              | SSH private keys                       |
+| kubernetes.io/service-account-token | ServiceAccount token for API access    |
+| bootstrap.kubernetes.io/token       | Cluster bootstrap credentials          |
+
+#### Example: Secret YAML for Opaque Secret
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-credentials
+type: Opaque
+data:
+  username: bXl1c2Vy # base64 for "myuser"
+  password: bXlwYXNzd29yZA== # base64 for "mypassword"
+```
+
+#### Example: Secret YAML for Docker Registry
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: regcred
+type: kubernetes.io/dockerconfigjson
+data:
+  .dockerconfigjson: <base64-encoded JSON>
+```
+
+### Creating Secrets
+
+#### 1. Using `kubectl` with literal values
+
+```shell
+kubectl create secret generic my-secret --from-literal=username=admin --from-literal=password=s3cr3t
+```
+
+#### 2. From files
+
+```shell
+kubectl create secret generic db-secret --from-file=./username.txt --from-file=./password.txt
+```
+
+#### 3. From manifest
+
+Define a YAML and apply:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: my-secret
+type: Opaque
+data:
+  api-key: c3VwZXJzZWNyZXQ= # base64 encoded value
+```
+
+#### 4. From env file
+
+```shell
+kubectl create secret generic demo-env --from-env-file=staging.env
+```
+
+#### 5. For Docker Registry
+
+```shell
+kubectl create secret docker-registry regcred --docker-server=<REGISTRY_URL> --docker-username=<USER> --docker-password=<PASS> --docker-email=<EMAIL>
+```
+
+### Consuming Secrets in Pods
+
+#### 1. Environment Variables
+
+```yaml
+env:
+  - name: DB_USERNAME
+    valueFrom:
+      secretKeyRef:
+        name: db-credentials
+        key: username
+```
+
+- Value is injected as plain text at runtime (after decoding base64).
+
+#### 2. Mounted Files (Volumes)
+
+```yaml
+volumes:
+  - name: secret-volume
+    secret:
+      secretName: db-credentials
+containers:
+  - name: app
+    ...
+    volumeMounts:
+      - name: secret-volume
+        mountPath: /etc/secrets
+        readOnly: true
+```
+
+- Each key becomes a filename in the target directory.
+- File permissions default to 0400 for security.
+
+#### 3. ServiceAccount Tokens
+
+- ServiceAccount tokens are provided automatically in all pods unless
+  `automountServiceAccountToken: false` is set.
+
+#### Example Pod Spec
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app-pod
+spec:
+  containers:
+    - name: app-container
+      image: myapp:latest
+      env:
+        - name: SECRET_VALUE
+          valueFrom:
+            secretKeyRef:
+              name: my-secret
+              key: string-value
+      volumeMounts:
+        - name: secret-volume
+          mountPath: /etc/secret
+          readOnly: true
+  volumes:
+    - name: secret-volume
+      secret:
+        secretName: my-secret
+```
+
+### Secret Updates: Management and Rolling Restarts
+
+- When a Secret is updated and consumed as **volume**, the mounted files will
+  _eventually_ be updated, but the application must either watch for changes or
+  be restarted to reload new data (similar to ConfigMaps).
+- When exposed via **env vars**, a _pod restart_ is required for new values.
+- All applications should be designed to tolerate secret rotations and restarts.
+- For automated updates, tools such as **Stakater Reloader** can monitor secrets
+  and trigger rolling restarts of pods or deployments.
+
+---
+
+## HashiCorp Vault
+
+In advanced, security-conscious environments, storing even Kubernetes Secrets
+within the cluster may not be sufficient or desirable. For these scenarios,
+**HashiCorp Vault** offers robust secret management capabilities including
+encryption, fine-grained access control, automatic rotation, and a documented
+audit trail.
+
+### Why Use Vault?
+
+- Centralizes secret storage and management across services, clusters, and
+  clouds.
+- Provides dynamic secret generation (temporary DB users, cloud credentials).
+- Strong authentication, authorization (AppRole, JWT, K8s service account auth).
+- Detailed auditing and access reporting.
+- Integrates with CI/CD, Kubernetes, and cloud native workflows.
+
+---
+
 # Persistent Volumes & Persistent Volume Claims
 
 ## 1. Persistent Volumes (PVs): Definition and Overview
