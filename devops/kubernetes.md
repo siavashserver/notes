@@ -917,3 +917,705 @@ queries metrics, computes desired replicas, and updates resource specs
 accordingly.
 
 ---
+
+## Fine-Grained Container Placement in Kubernetes
+
+This capability is not delivered by default scheduling alone but rather by a
+robust suite of mechanisms that enable fine-grained control over _which
+containers (pods)_ run _on which nodes_ within the cluster.
+
+## Kubernetes Scheduler Architecture and Scheduling Phases
+
+### Overview of the kube-scheduler
+
+Kubernetes scheduling is responsible for **deciding on which node an unscheduled
+Pod will run**. The core entity is `kube-scheduler`, running as part of the
+control plane.
+
+The kube-scheduler executes a **two-phase process** for each pending Pod:
+
+1. **Filtering phase:** The scheduler filters out nodes that do not meet the
+   Pod's basic requirements. These requirements can include resource requests,
+   node selectors, affinity/anti-affinity, taints/tolerations, etc. Only the
+   nodes that pass all these constraints are considered feasible.
+2. **Scoring phase:** Each feasible node is given a score, which is a composite
+   of criteria such as resource availability, spread, locality, etc. The Pod is
+   bound to the node with the highest score.
+
+### Scheduling Sequence: Key Steps
+
+1. **Pod creation:** A user or controller (e.g., Deployment) creates a Pod
+   object without a specified node assignment.
+2. **Pending state:** The API server marks the Pod as Pending for scheduling.
+3. **Scheduler picks Pod:** kube-scheduler selects the unscheduled Pod from the
+   queue.
+4. **Filtering:** The feasible nodes are identified (filtering out those failing
+   resource or policy checks).
+5. **Scoring:** The remaining nodes are scored; affinity, anti-affinity, and
+   spread constraints may influence this.
+6. **Binding:** The scheduler "binds" the Pod to the chosen node (by updating
+   `spec.nodeName`).
+7. **Kubelet starts container:** On the assigned node, the kubelet pulls images
+   and starts the containers.
+
+**Constraints** like affinity, taints, and selectors participate in both
+Filtering and Scoring phases.
+
+---
+
+## Node Selection Mechanisms: Theory and YAML Examples
+
+### Node Selectors
+
+#### What is a Node Selector?
+
+The **nodeSelector** is the simplest form of node selection constraint. It is
+specified as a map of key/value pairs that must exactly match the node's labels.
+
+**YAML example:**
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ssd-worker
+spec:
+  containers:
+    - name: workload
+      image: nginx
+  nodeSelector:
+    disktype: ssd
+```
+
+To use this, you must first label the relevant node:
+
+```bash
+kubectl label nodes <node-name> disktype=ssd
+```
+
+**Behavior:**
+
+- Pods will _only_ schedule onto a node matching _all_ the specified labels.
+- No ordering or preference is specified; only a rigid match is accepted.
+- If no suitable nodes exist, the Pod will remain in Pending.
+
+**Real-World Use Cases:**
+
+- Assign workloads to nodes with specific hardware (SSD, GPU).
+- Separate environments (e.g., `env=production`, `env=dev`).
+- Quickly dedicate nodes for specialized needs.
+
+**Best Practices and Limitations:**
+
+- Node selectors are simple and effective but inflexible; only strict matches
+  are possible.
+- Cannot specify logical operators, multiple alternatives, or soft preferences.
+- Does not support spreading, distribution, or dynamic fallback.
+
+---
+
+### Node Affinity
+
+#### What is Node Affinity?
+
+**NodeAffinity** extends nodeSelector functionality with more expressive
+configuration. It allows you to specify both "hard" (required) and "soft"
+(preferred) placement constraints, supports operators (In, NotIn, Exists), and
+is generally more flexible.
+
+**Key types:**
+
+- **requiredDuringSchedulingIgnoredDuringExecution**: _Hard_ affinity, must
+  match at scheduling time.
+- **preferredDuringSchedulingIgnoredDuringExecution**: _Soft_ preference,
+  scheduler will try but fallback if needed.
+
+**YAML example:**
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu-worker
+spec:
+  containers:
+    - name: workload
+      image: my-ml-task
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: gpu
+                operator: In
+                values:
+                  - "true"
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 10
+          preference:
+            matchExpressions:
+              - key: environment
+                operator: In
+                values: ["production"]
+```
+
+**Capabilities:**
+
+- Operators: In, NotIn, Exists, DoesNotExist, Gt, Lt
+- Multiple expressions (AND within a nodeSelectorTerm, OR across
+  nodeSelectorTerms)
+- Soft (weighted) and hard (mandatory) constraints
+- Can build complex logic, e.g., `disk=ssd` AND `region IN [us-west, eu]`
+
+**Real-World Use Cases:**
+
+- Only schedule ML workloads to specific GPU-enabled, high-memory, or regional
+  nodes.
+- Prefer but do not require certain zones/regions for improved latency or cost.
+
+**Best Practices:**
+
+- Prefer nodeAffinity over nodeSelectors for future-proofing.
+- Combine required and preferred settings for resiliency across environments.
+- Use expressive operators for easier administration.
+
+**Limitations:**
+
+- Does not _repel_ workloads (unlike taints).
+- Does not allow for dynamic adjustments after Pods are scheduled
+  ("IgnoredDuringExecution").
+
+---
+
+### Pod Affinity and Anti-Affinity
+
+#### What are Pod Affinity and Anti-Affinity?
+
+**Pod affinity** allows pods to be scheduled on nodes where specific other pods
+(identified by label) are already running. **Pod anti-affinity** works as a
+repulsion, preventing placement on nodes hosting certain other pods.
+
+These settings are particularly useful for **workload colocation (e.g., to
+minimize latency between cooperating services) or high availability (e.g.,
+prevent all replicas from landing on the same node/zone).**
+
+**Types:**
+
+- **requiredDuringSchedulingIgnoredDuringExecution**: Hard; must be satisfied.
+- **preferredDuringSchedulingIgnoredDuringExecution**: Soft; try but fallback
+  allowed.
+
+**Key concepts:**
+
+- `topologyKey`: The label key used to determine the scope of the affinity
+  ("kubernetes.io/hostname" for node-level, AZ labels for zone-level).
+- `labelSelector`: Matches target pods for affinity or anti-affinity.
+
+**Pod Affinity YAML:**
+
+Pod affinity to co-locate frontend and backend:
+
+```yaml
+affinity:
+  podAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app
+              operator: In
+              values:
+                - backend
+        topologyKey: "kubernetes.io/hostname"
+```
+
+**Pod Anti-Affinity YAML:**
+
+Distribute replicas across nodes:
+
+```yaml
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app
+              operator: In
+              values:
+                - my-app
+        topologyKey: "kubernetes.io/hostname"
+```
+
+**Advantages and Use Cases:**
+
+- Enforce anti-colocation for higher-availability deployments (e.g., stateful
+  apps).
+- Colocate pods for high network throughput or low-latency interactions (e.g.,
+  web app and cache).
+- Distribute stateless replicas for load balancing, minimize "blast radius" of
+  failures.
+
+**Limitations and Considerations:**
+
+- Pod affinity/anti-affinity can be expensive to compute in very large clusters
+  (hundreds of nodes).
+- All nodes must have the specified `topologyKey` label; a mislabelled node can
+  result in unscheduled pods.
+- Can combine both affinity and anti-affinity for sophisticated layouts.
+- Pod anti-affinity can be more deterministic for spreading than podAffinity for
+  grouping.
+
+---
+
+### Taints and Tolerations
+
+#### What are Taints and Tolerations?
+
+- **Taints** are applied to nodes and _repel pods_ unless the pods have a
+  matching **toleration**. This is the inverse to node affinity, acting as a
+  node's "keep out" filter.
+
+**Taint Command Example:**
+
+```bash
+kubectl taint nodes node1 gpu=present:NoSchedule
+```
+
+- Key: `gpu`
+- Value: `present`
+- Effect: `NoSchedule` (others: `PreferNoSchedule`, `NoExecute`)
+
+**Pod Toleration YAML Example:**
+
+```yaml
+tolerations:
+  - key: "gpu"
+    value: "present"
+    effect: "NoSchedule"
+    operator: "Equal"
+```
+
+**Behavior:**
+
+- Without a toleration matching the node's taint, the Pod _cannot_ be scheduled
+  to the node.
+- With a matching toleration, the Pod can be scheduled.
+- Does not _guarantee_ scheduling on that node—only _allows_ it.
+- With `NoExecute`, the Pod will be evicted from the node upon violation.
+
+**Common Use Cases:**
+
+- Reserve nodes for specific teams, workloads, or hardware (e.g., GPU,
+  high-memory).
+- Perform maintenance by repelling generic workloads and ensuring only
+  privileged pods or DaemonSets run.
+- Protect control-plane nodes from general-purpose workloads (masters are
+  typically tainted by default).
+
+**Interaction and Combination:**
+
+- Combine taints and tolerations with node affinity for stricter placement.
+- Use together with node affinity to provide both attract and repel (see
+  advanced patterns below).
+
+**Best Practices:**
+
+- Be intentional with taint usage to prevent orphaned workloads.
+- Use tolerations sparingly to avoid accidental cross-placement.
+
+---
+
+### Topology Spread Constraints
+
+#### What are Topology Spread Constraints?
+
+**Pod topology spread constraints** allow you to express rules about how Pods of
+a given workload should be distributed across a topology domain—such as nodes,
+zones, or regions—to avoid imbalance and minimize risk of failure.
+
+**Key Fields:**
+
+- `maxSkew`: Maximum allowed difference in the number of matching pods between
+  the most and least loaded topology domain.
+- `topologyKey`: Node label to define failure domains (e.g.,
+  `kubernetes.io/hostname`, `topology.kubernetes.io/zone`).
+- `whenUnsatisfiable`: What to do if the constraint cannot be satisfied
+  (`DoNotSchedule`, `ScheduleAnyway`).
+- `labelSelector`: Which pods are considered in the spread computation.
+
+**YAML Example:**
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: spread-pod
+spec:
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          app: frontend
+  containers:
+    - name: nginx
+      image: nginx
+```
+
+**Real-World Use Cases:**
+
+- Ensuring replicas of a workload are evenly spread by node, zone, or rack.
+- Meeting specific SLOs for balancing workloads to prevent single-node or AZ
+  overload.
+- Achieving compliance or business continuity by spreading across failure
+  domains.
+
+**Comparison: Pod Anti-Affinity vs. Topology Spread:** While pod anti-affinity
+can accomplish similar objectives (e.g., keeping replicas off the same node),
+topology spread constraints are often more efficient and expressive for even
+distribution and can work at higher topology levels (such as region/zone).
+
+---
+
+### Manual Pod Assignment: nodeName
+
+#### What is `nodeName`?
+
+By setting `.spec.nodeName` in a Pod, you are directly assigning the Pod to a
+specific node—bypassing the scheduler entirely.
+
+**Example:**
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: manual-assigned-pod
+spec:
+  containers:
+    - name: nginx
+      image: nginx
+  nodeName: node-foo
+```
+
+**Implications:**
+
+- No filtering or placement logic is applied.
+- Danger: Pod will _fail_ if the node does not exist or cannot accept the Pod
+  (e.g., insufficient resources or taints).
+- Most useful in special cases, such as debugging or with custom operator logic.
+
+**Best Practices:**
+
+- Avoid in general-purpose production workloads.
+- Prefer affinity/selector mechanisms for sustainable, scalable placement.
+
+---
+
+### DaemonSets for Per-Node Pods
+
+#### What is a DaemonSet?
+
+A **DaemonSet** ensures that **one Pod (or a subset) runs on every (or every
+matching) node in a cluster**.
+
+**Typical Use Cases:**
+
+- Node-local system agents (monitoring, logging, CNI).
+- Storage or infrastructure tasks (e.g., persistent logging collectors).
+- Security agents and node-level proxies.
+
+**YAML Skeleton:**
+
+```yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-monitor
+spec:
+  selector:
+    matchLabels:
+      name: node-monitor
+  template:
+    metadata:
+      labels:
+        name: node-monitor
+    spec:
+      containers:
+        - name: monitor
+          image: datadog/agent
+      nodeSelector:
+        monitoring: enabled
+```
+
+**Targeting Specific Nodes:**
+
+- Use `nodeSelector`, `nodeAffinity` and/or `tolerations` in the DaemonSet pod
+  template to limit to a subset of nodes.
+- DaemonSets can run on tainted nodes; often have necessary tolerations by
+  default.
+
+**Scheduling Behavior:**
+
+- DaemonSet controller places pods directly; then default scheduler binds them
+  to the intended node.
+- DaemonSets tolerate node taints such as
+  `node.kubernetes.io/not-ready:NoExecute` by default.
+
+---
+
+### Resource Requests and Limits: Scheduler Impact
+
+**Resource requests** (`resources.requests`) define the _minimum_ amount of
+CPU/memory a Pod requires, and the scheduler only considers nodes with enough
+free resources for those requests.
+
+**Resource limits** (`resources.limits`) define the _maximum_ a container can
+use but are **not considered during scheduling**—only enforced at runtime.
+
+**Example:**
+
+```yaml
+resources:
+  requests:
+    cpu: 500m
+    memory: 256Mi
+  limits:
+    cpu: 1
+    memory: 1Gi
+```
+
+**Scheduler Behavior:**
+
+- Only requests are taken into account for bin-packing; limits are not.
+- Pods will remain Pending if no node meets resource _requests_, even if limits
+  would fit.
+
+**Use Cases:**
+
+- Control overcommit and guarantee resource isolation for critical workloads
+- Prevent noisy-neighbor impact
+
+**Caveats:**
+
+- Always specifying realistic requests prevents unschedulability and inefficient
+  resource fragmentation.
+- Lack of limits can lead to "hogging" by misbehaving workloads.
+
+---
+
+### Priority Classes and Pod Preemption
+
+**PriorityClass** resources let you assign a relative priority to pods,
+influencing scheduling when resource contention occurs.
+
+- **Pods with higher priorities can preempt (evict) lower-priority pods** when
+  necessary to secure placement.
+- Enables robust SLO/slo enforcement, critical-service protection, and batch
+  workload optimization.
+
+**YAML Example:**
+
+Define a PriorityClass:
+
+```yaml
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: high-priority
+value: 1000000
+globalDefault: false
+description: "Used for critical services"
+```
+
+Assign to a pod:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: critical-service
+spec:
+  priorityClassName: high-priority
+  ...
+```
+
+**Preemption Policy:** By default, `PreemptLowerPriority` is used; you may
+specify `Never` to prevent preemption.
+
+**Implications:**
+
+- Maintaining cluster health requires careful assignment and monitoring of
+  priorities, to avoid cascades of preemption or starvation of lower-priority
+  workloads.
+- Preemption respects PodDisruptionBudgets unless overridden for very
+  high-priority pods.
+
+---
+
+### Custom Schedulers and schedulerName
+
+Kubernetes supports running **multiple schedulers** in a cluster. By specifying
+`schedulerName` in your Pod spec, you may direct scheduling to a custom (or
+third-party) scheduler instance.
+
+**Example:**
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: specialized-workload
+spec:
+  schedulerName: custom-scheduler
+  containers:
+    - name: app
+      image: my-specialized-image
+```
+
+**Use Cases:**
+
+- Specialized bin-packing, business logic, or hardware considerations outside
+  the default scheduler's capabilities.
+- Experimental or research-driven algorithm development (e.g., batch schedulers
+  for HPC, job orchestrators).
+- Integration with domain-specific resources or frameworks (e.g., Volcano for
+  ML/HPC workloads).
+
+**Cautions:**
+
+- Custom schedulers must correctly manage leader election, Pod binding, and
+  status reconciliation.
+- Only one scheduler will schedule a Pod; others ignore Pods not labeled for
+  them.
+- Overlapping scheduler configurations can cause confusion if not
+  well-documented.
+
+---
+
+## Combining Mechanisms for Fine-Grained Scheduling
+
+### Matrix of Interactions
+
+The mechanisms discussed above are **not mutually exclusive** and can (and often
+should) be combined to express sophisticated scheduling policies and isolation.
+The following table summarizes their core functions, overlap, and best-use
+combinations.
+
+| **Mechanism**        | **Key Purpose**                             | **Policy Type**       | **Interaction**                                      | **Best Use/Notes**                                                                        |
+| -------------------- | ------------------------------------------- | --------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| nodeSelector         | Directly attract pod to specific nodes      | Hard constraint       | AND'd with affinity/taints                           | Simple static matching. Combine with taints/tolerations for single-tenant isolation.      |
+| nodeAffinity         | Expressive, flexible node matching          | Hard/soft             | AND'd with other selectors and tolerations           | Use for hardware, region constraints. Prefer over nodeSelector for future flexibility.    |
+| podAffinity/anti-    | Attract or repel based on pod presence      | Hard/soft             | AND'd with node constraints                          | Fine-tune colocation/spanning of related workloads; expensive in large clusters.          |
+| taints & tolerations | Repel/allow pods to nodes                   | Repulsion (hard/soft) | AND'd with affinity                                  | Use to exclude groups of workloads from nodes. Combine with affinity for dedicated nodes. |
+| topologySpread       | Even distribution across domains            | Hard/soft             | Evaluated after filtering, impacts scoring           | Modern alternative to podAntiAffinity for distribution or HA.                             |
+| nodeName             | Override (static placement)                 | Always (hardest)      | Ignores scheduler; bypasses normal constraints       | For debugging or custom logic only. Use with caution in production.                       |
+| DaemonSet            | Automate per-node deployment                | Controller logic      | Uses selectors, affinity, tolerations for targeting  | For per-node singleton pods (monitoring, logging, CNI, etc.)                              |
+| PriorityClass        | Scheduling preference and eviction ordering | Global                | Can preempt lower-priority pods if schedule blocked  | Prevent starvation of critical workloads; caution with globalDefault                      |
+| schedulerName        | Use custom scheduler                        | Controller/external   | Must be paired with custom scheduling implementation | For specialized workloads, batch scheduling, or research                                  |
+
+**When combining mechanisms:**
+
+- All constraints (selectors, affinity, tolerations) must be satisfied for
+  placement.
+- Taints act as negative filters, affinity/selectors as positive; combine for
+  exclusive node pools.
+- Use preferred rules where absolute assignment is undesirable to avoid
+  scheduling starvation.
+- Beware of conflicting rules—Pods may remain forever Pending if constraints are
+  too restrictive.
+
+---
+
+## YAML Walkthrough: Combined Scenario
+
+**Scenario:** Suppose you have nodes dedicated to GPU ML workloads, and you must
+ensure only GPU jobs run there, spread evenly across nodes. Other workers must
+not land on GPU nodes, and each replica should land on a distinct node.
+
+- Label nodes: `hardware=gpu` (for GPU nodes), `hardware=general` (for others).
+- Taint nodes: `kubectl taint nodes nodeX special=gpu:NoSchedule`
+- Pod spec:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ml-task
+  labels:
+    app: ml-worker
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: hardware
+                operator: In
+                values: ["gpu"]
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values: ["ml-worker"]
+          topologyKey: "kubernetes.io/hostname"
+  tolerations:
+    - key: "special"
+      operator: "Equal"
+      value: "gpu"
+      effect: "NoSchedule"
+  containers:
+    - name: worker
+      image: my-gpu-image
+      resources:
+        requests:
+          cpu: 2
+          memory: 8Gi
+```
+
+This:
+
+- Attracts (only) to nodes labelled as GPU.
+- Requires multi-node spreading (one per node).
+- Only tolerates (can be scheduled onto) GPU-tainted nodes.
+- Cannot accidentally run on non-GPU or general nodes, nor can general workloads
+  run on tainted GPU nodes.
+
+---
+
+## Advanced Patterns and Best Practices
+
+1. **Layer constraints for absolute control**: Combine taints/tolerations
+   (exclude non-matching pods) with node affinity (attract correct pods) for
+   isolation.
+2. **Use topology spread constraints for resilient workloads**: Especially where
+   zone outages are a concern or regulation requires distribution.
+3. **Avoid over-constraining**: Excessive hard rules (required
+   affinities/taints) can easily block scheduling; always test in staging.
+4. **Monitor scheduling outcomes using `kubectl describe pod <pod>`**: Review
+   `Events` for FailedScheduling and debug via node labels, resource reporting.
+5. **Label and taint management automation**: Use tools (e.g., Cluster API,
+   Kubeadm, cloud provider APIs) for consistency—mislabeling nodes is a common
+   cause of scheduling errors.
+6. **Document scheduling policies**: The complexity and interactions can trip up
+   even experienced practitioners; maintain up-to-date design docs.
+
+---
+
+## Summarizing Table: Feature Comparison
+
+| Feature                          | Placement Type         | Positive/Negative Matching | Hard/Soft | Expressiveness       | Maintenance Level | Primary Use Cases                                  |
+| -------------------------------- | ---------------------- | -------------------------- | --------- | -------------------- | ----------------- | -------------------------------------------------- |
+| nodeSelector                     | Node-only              | Positive                   | Hard      | Simple (exact match) | Easy              | Basic node targeting, quick setups                 |
+| nodeAffinity                     | Node-only              | Positive                   | Both      | High                 | Medium            | Hardware, region/zone/label-based matching         |
+| podAffinity/podAntiAffinity      | Node (via pods)        | Pos/Neg (colocate/spread)  | Both      | High                 | High              | Distributed HA, service colocation                 |
+| taints/tolerations               | Node-only              | Negative                   | Both      | Medium               | Medium            | Isolation, maintenance, special nodes              |
+| topologySpreadConstraints        | Domain (node/zone/etc) | Spread/Even-ness           | Both      | High                 | Medium            | Resilient HA, platform compliance, cost management |
+| nodeName                         | Node-only              | Hard-overriding            | Hardest   | None (manual)        | Manual            | Debugging, admin override, static assignment       |
+| DaemonSet                        | Node-specific          | Follows spec/labels        | Hard      | Controlled by spec   | Automatable       | Node agents, infra daemons, system pods            |
+| PriorityClass/Preemption         | All                    | Scheduling precedence      | N/A       | N/A                  | Policy-side       | SLOs, resource triage, batch/critical separation   |
+| schedulerName (custom scheduler) | All                    | Fully programmable         | N/A       | As coded             | High              | Specialized, research, strongly custom scheduling  |
+
+---
