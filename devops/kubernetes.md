@@ -918,7 +918,410 @@ accordingly.
 
 ---
 
-## Fine-Grained Container Placement in Kubernetes
+# Persistent Volumes & Persistent Volume Claims
+
+## 1. Persistent Volumes (PVs): Definition and Overview
+
+A **Persistent Volume (PV)** in Kubernetes is a cluster-level resource
+representing a piece of storage, provisioned independently of individual pods.
+PVs abstract away underlying details—be they disks, network-attached file
+systems, or cloud storage APIs—providing a consistent interface for storage
+consumption. PVs can be configured directly by cluster administrators (static
+provisioning) or created automatically in response to user requests (dynamic
+provisioning).
+
+Key properties of PVs:
+
+- **Cluster-Wide Resource**: Unlike ephemeral volumes (such as `emptyDir`), a PV
+  exists beyond the lifespan of a single pod and is not bound to a particular
+  namespace.
+- **Independence**: PVs are decoupled from pod lifecycles, thus outliving
+  crashes, deletions, or restarts of pods using them.
+- **Implementation Flexibility**: PVs can represent diverse storage backends
+  (local disks, NFS, iSCSI, cloud block stores like AWS EBS, GCP Persistent
+  Disk, etc.).
+- **Customizable Policies**: Administrators define storage class, capacity,
+  access modes, reclaim policies, mount options, etc..
+
+Example YAML for a statically provisioned PV:
+
+```yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: example-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: manual
+  hostPath:
+    path: /mnt/data
+```
+
+In this definition:
+
+- `capacity.storage`: Amount of storage being exposed.
+- `accessModes`: See section below for details.
+- `persistentVolumeReclaimPolicy`: What happens when a claim releases this PV.
+- `storageClassName`: Policy for dynamic provisioning or binding with PVCs.
+- `hostPath`: Backend storage mechanism—here, a path on the host (for
+  testing/development only).
+
+---
+
+## 2. Persistent Volume Claims (PVCs): Definition and Overview
+
+A **Persistent Volume Claim (PVC)** is a user's request for storage that
+abstracts away specifics of the underlying physical storage. In other words, it
+is to storage what a pod is to compute resources—a specification for what is
+needed, not _how_ it is implemented.
+
+Example YAML for a PVC:
+
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: example-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: manual # Optional, for static provisioning
+```
+
+---
+
+## 3. PV and PVC Lifecycle: Provisioning, Binding, and Reclaiming
+
+The lifecycle of PVs and PVCs involves several key phases:
+
+### A. Provisioning
+
+- **Static**: Admins pre-create PVs. Users create PVCs that target available PVs
+  by size, access mode, storage class, etc. Suitable for predictable or manually
+  managed environments.
+- **Dynamic**: Users create PVCs; Kubernetes auto-creates the backing PV
+  on-the-fly using StorageClasses for provisioning parameters (provisioner,
+  backend type, policies). Dominant in cloud-native and scalable setups.
+
+### B. Binding
+
+- Kubernetes automatically binds PVCs to matching PVs, based on the requested
+  size, access mode, and class. When using StorageClasses, a new PV is created
+  if none fits.
+- Binding is **one-to-one**: a PV can be bound to only one PVC at a time.
+
+### C. Using
+
+- Once bound, pods reference the PVC in their volumes. Kubernetes mounts the
+  backing storage to the pod at the specified path(s).
+
+### D. Reclaiming
+
+- When a PVC is deleted, the PV enters the **Released** state. The subsequent
+  fate depends on the PV's reclaim policy:
+  - **Retain**: PV is marked Released, retains data, and requires admin cleanup.
+  - **Delete**: Kubernetes deletes the underlying storage resource and the PV
+    entity.
+  - **Recycle** (deprecated): PV is scrubbed and made available for reuse.
+
+#### Table: PV Reclaim Policies
+
+| Policy    | Description                                                    | Typical Use Case                                     |
+| --------- | -------------------------------------------------------------- | ---------------------------------------------------- |
+| Retain    | Keeps data on volume; requires manual intervention to reuse    | Critical/irreplaceable data, manual migration/backup |
+| Delete    | Removes PV and underlying storage automatically                | Dynamic, cloud-native applications, test/dev         |
+| Recycle\* | Wipes the volume then returns to available pool (\*deprecated) | Older deployments, rarely used                       |
+
+After a PV is released, it can be reused or manually deleted depending on
+policy. Always understand reclaim behavior before deploying critical workloads.
+
+---
+
+## 4. Static vs. Dynamic Provisioning Using StorageClasses
+
+Kubernetes supports two provisioning approaches:
+
+| Provisioning Type | How It Works                                                    | Pros                                | Cons                             | Suitable Use Case                            |
+| ----------------- | --------------------------------------------------------------- | ----------------------------------- | -------------------------------- | -------------------------------------------- |
+| Static            | Admin pre-creates PVs with fixed capacity, access, and backend. | Predictable, simple, manual control | Scalability, higher admin effort | Known workloads, manual migration            |
+| Dynamic           | Admin defines a StorageClass; PVC triggers auto-creation of PV. | Scalable, automated, cheaper        | Less manual control              | Cloud-native, production, variable workloads |
+
+### StorageClasses
+
+A **StorageClass** is a template describing how storage should be dynamically
+provisioned—specifying the provisioner (plugin), type (e.g., fast SSD),
+parameters, and reclaim policy forms the foundation of dynamic provisioning..
+
+#### Example: StorageClass for AWS EBS
+
+```yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: gp3
+  iopsPerGB: "50"
+  encrypted: "true"
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+```
+
+- `parameters`: Control disk type, IOPS, encryption, etc.
+- `reclaimPolicy`: Delete the volume automatically on PVC deletion.
+- `allowVolumeExpansion`: Supports resizing if needed.
+- `volumeBindingMode`: Controls binding timing (see advanced section).
+
+#### Dynamic Provisioning Flow
+
+1. Admin creates one or more StorageClasses.
+2. User submits PVC referencing a storage class (`storageClassName: fast-ssd`).
+3. Kubernetes, via the StorageClass's provisioner, creates a matching PV and
+   binds it to the PVC.
+4. When the PVC is deleted, reclaim policy applies.
+
+Dynamic provisioning is **best practice** for most Kubernetes installations,
+especially in the cloud or in large-scale multi-tenant scenarios.
+
+---
+
+## 5. Key Configuration Fields: AccessModes, VolumeMode, and Reclaim Policy
+
+Correct configuration is vital for both PVs and PVCs. Below is a summary of
+critical fields:
+
+| Field                           | Role & Accepted Values                        | Best Practice                                |
+| ------------------------------- | --------------------------------------------- | -------------------------------------------- |
+| `capacity.storage`              | Size of the volume (e.g., 10Gi)               | Match to app requirements                    |
+| `accessModes`                   | RWO, ROX, RWX, RWOP (see below)               | Use RWO for most DBs                         |
+| `volumeMode`                    | `Filesystem` (default) or `Block`             | Filesystem unless raw block is needed        |
+| `persistentVolumeReclaimPolicy` | Retain / Delete / Recycle (deprecated)        | Retain for critical data; Delete for dynamic |
+| `storageClassName`              | Name of the StorageClass (dyn. prov.)         | Set for dynamic; "" for none                 |
+| `mountOptions`                  | List of mount options (e.g., ["nfsvers=4.1"]) | As required by backend                       |
+| `nodeAffinity`                  | Restrict PV mountability to certain nodes     | Use for local or zone-aware storage          |
+| `allowVolumeExpansion`          | (StorageClass) If true, supports resizing     | true if resizing may be needed               |
+
+### AccessModes Explained
+
+Each PV and PVC can specify one or more access modes (useful for compatibility,
+but only one is active at mount):
+
+- **ReadWriteOnce (RWO):** Mounted as read-write by a single node. Most common
+  for databases.
+- **ReadOnlyMany (ROX):** Mounted as read-only by many nodes. Useful for sharing
+  static data.
+- **ReadWriteMany (RWX):** Mounted as read-write by many nodes. Needed for
+  file-sharing, collaborative apps, logs.
+- **ReadWriteOncePod (RWOP):** Mounted as read-write by only a single pod
+  (Kubernetes 1.22+; for stricter isolation).
+
+Different cloud and storage backends support different access modes. For
+example, AWS EBS typically only supports RWO.
+
+### VolumeMode
+
+- **Filesystem (default):** Mounts as directories (ext4, xfs, etc.)
+- **Block:** Provides raw block device directly.
+
+### Table: Key Fields in PV and PVC
+
+| Field                         | PV Example                | PVC Example              | Description                                    |
+| ----------------------------- | ------------------------- | ------------------------ | ---------------------------------------------- |
+| kind                          | PersistentVolume          | PersistentVolumeClaim    | Resource type                                  |
+| capacity.storage              | 10Gi                      | (PVC requests: 5Gi)      | Storage size                                   |
+| accessModes                   | ReadWriteOnce, RWX, etc.  | ReadWriteOnce, RWX, etc. | Access policies                                |
+| volumeMode                    | Filesystem / Block        | Filesystem / Block       | Mount type (directory or block)                |
+| persistentVolumeReclaimPolicy | Retain / Delete / Recycle | (N/A)                    | Policy for released PVs                        |
+| storageClassName              | manual / fast-ssd         | manual / fast-ssd        | Used in matching/dynamic provisioning          |
+| mountOptions                  | [hard, nfsvers=4.1]       | (N/A)                    | Advanced mount options                         |
+| nodeAffinity                  | (see below for YAML)      | (N/A)                    | Limits valid nodes for PVs (often cloud/Zones) |
+
+---
+
+## 6. Pod Volume Usage with PVCs
+
+Pods use PVCs by referencing them in the `volumes` section of their
+specification, and containers mount the storage via `volumeMounts`.
+
+### Example: Pod Using a PVC
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-using-pvc
+spec:
+  containers:
+    - name: web
+      image: nginx
+      volumeMounts:
+        - name: app-data
+          mountPath: /usr/share/nginx/html
+  volumes:
+    - name: app-data
+      persistentVolumeClaim:
+        claimName: example-pvc
+```
+
+- The pod mounts storage at `/usr/share/nginx/html` from the PVC `example-pvc`.
+- This approach can be used for Deployments, StatefulSets, or DaemonSets as
+  well.
+
+#### Pod with Multiple VolumeMounts
+
+Mounting subpaths:
+
+```yaml
+volumeMounts:
+  - name: config
+    mountPath: /usr/share/nginx/html
+    subPath: html
+  - name: config
+    mountPath: /etc/nginx/nginx.conf
+    subPath: nginx.conf
+volumes:
+  - name: config
+    persistentVolumeClaim:
+      claimName: task-pv-storage
+```
+
+This allows flexible file or directory mapping within the same volume.
+
+---
+
+## 7. StorageClasses: Influence on Provisioning
+
+A **StorageClass** represents a class or "profile" of storage, defining access
+parameters, underlying driver, and policies for automated volume creation,
+expansion, and reclamation.
+
+- **Provisioner**: Plugin/driver to use (cloud, NFS, CSI).
+- **Parameters**: Storage-specific settings (e.g., iops, fsType, availability
+  zone).
+- **ReclaimPolicy**: Default reclaim policy for dynamically provisioned volumes.
+- **allowVolumeExpansion**: Toggle for resizing.
+- **volumeBindingMode**: When to bind (on claim creation or on pod scheduling).
+- **allowedTopologies**: Control zone/region for volume placement.
+
+StorageClass YAML Example (Azure Disk):
+
+```yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: azure-managed-disk
+provisioner: disk.csi.azure.com
+parameters:
+  storageaccounttype: Standard_LRS
+  kind: managed
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+```
+
+> **Default StorageClass**: If a StorageClass is annotated with
+> `is-default-class: "true"`, PVCs without an explicit `storageClassName` use
+> it.
+
+---
+
+## 8. Usage Scenarios
+
+### A. Stateful Applications & StatefulSets
+
+Stateful workloads (e.g., databases, message queues) require stable identities
+and durable storage. Kubernetes restricts regular Deployments to ephemeral pods,
+but **StatefulSets** support persistent storage via unique PVCs per pod (using
+`volumeClaimTemplates`).
+
+#### Example: StatefulSet with Per-Pod PVCs
+
+```yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: web
+spec:
+  serviceName: "nginx"
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:latest
+          volumeMounts:
+            - name: www
+              mountPath: /usr/share/nginx/html
+  volumeClaimTemplates:
+    - metadata:
+        name: www
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: "fast-ssd"
+        resources:
+          requests:
+            storage: 5Gi
+```
+
+- Each replica will have a PVC named `www-web-0`, `www-web-1`, etc.
+- PVCs are not deleted on scale-down; allows for recovery/data retention.
+
+### B. Shared Storage Across Pods
+
+When multiple pods need access to the same storage concurrently, use a PV
+supporting **ReadWriteMany (RWX)**. Filesystems like NFS or certain
+CSI/third-party solutions facilitate RWX with appropriate StorageClasses.
+
+#### Example PVC for RWX
+
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-logs
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: nfs-sc
+  resources:
+    requests:
+      storage: 50Gi
+```
+
+- Backed by an NFS or a shared volume, usable by multiple pods (e.g., log
+  aggregation, file-sharing).
+
+### C. Dynamic Provisioning in Production
+
+Dynamic provisioning—enabling storage on demand—is essential for agile, scalable
+deployments. Coupled with modern CSI drivers and cloud integration,
+StorageClasses enable provisioning that matches performance, durability, and
+cost requirements, automatically.
+
+#### Example: Deploying a Database in Production
+
+1. Define a StorageClass tailored for your cloud or SAN backend.
+2. Create a PVC referencing the StorageClass.
+3. Deploy the database, referencing the PVC in its pod spec.
+
+---
+
+# Fine-Grained Container Placement in Kubernetes
 
 This capability is not delivered by default scheduling alone but rather by a
 robust suite of mechanisms that enable fine-grained control over _which
