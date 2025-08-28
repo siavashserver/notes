@@ -649,3 +649,1935 @@ Benefit: Reduced overhead for repeated queries with variable parameters.
 Expression Trees (`Expression<Func<T, bool>>`) allow LINQ providers (like EF) to
 analyze, optimize, and translate queries into other languages (such as SQL),
 because the code is represented structurally, not as compiled delegates.
+
+---
+
+## `SelectMany`
+
+### Usage Scenarios
+
+**Typical use cases for SelectMany:**
+
+- **Flattening Nested Collections:** Combine sub-lists (like order items per
+  order, skills per employee, or programming languages per student) into a flat
+  list.
+- **Generating Cartesian or Cross Products:** For scenarios needing every
+  possible pairing between two sets.
+- **Accessing Deeply Nested Hierarchies:** When models contain multiple levels,
+  `SelectMany` cleanly projects all items at a specified depth.
+- **Collection Transformation:** When the transformation of each source element
+  results in a sequence, and you want to bring all those together.
+
+---
+
+### Method Syntax Examples
+
+#### Flattening Child Collections
+
+Assume:
+
+```csharp
+public class Student
+{
+    public int ID { get; set; }
+    public string Name { get; set; }
+    public string Email { get; set; }
+    public List<string> Programming { get; set; }
+}
+```
+
+Usage:
+
+```csharp
+List<string> allPrograms = students.SelectMany(s => s.Programming).ToList();
+foreach (string prog in allPrograms)
+{
+    Console.WriteLine(prog);
+}
+// Output: All programming languages across all students, flattened into one list
+```
+
+#### Flattening and Removing Duplicates
+
+```csharp
+List<string> distinctPrograms = students
+    .SelectMany(s => s.Programming)
+    .Distinct()
+    .ToList();
+```
+
+This merges child collections and removes duplicates.
+
+#### Using Result Selector
+
+```csharp
+var studentAndProgram = students
+    .SelectMany(
+        s => s.Programming,
+        (student, prog) => new { StudentName = student.Name, Program = prog }
+    ).ToList();
+
+foreach (var item in studentAndProgram)
+{
+    Console.WriteLine($"{item.StudentName} => {item.Program}");
+}
+```
+
+Here, the result selector produces a projection combining parent and child
+info—useful for reporting or for mapping to denormalized data.
+
+#### Combining With Index
+
+```csharp
+var indexed = petOwners.SelectMany(
+    (owner, idx) => owner.Pets.Select(pet => $"{idx + 1}-{pet}")
+);
+```
+
+The index argument in `SelectMany` can be used for advanced mapping schemes.
+
+---
+
+### SQL Equivalent
+
+Because SQL has no concept of in-row nested collections, **SelectMany’s**
+behavior equates to:
+
+- **CROSS APPLY** or **INNER JOIN** on foreign keys in a normalized schema.
+- **UNION ALL** or use of table-valued functions for flattening.
+
+Example analogous SQL:
+
+```sql
+SELECT s.Name, sp.Program
+FROM Students s
+JOIN StudentPrograms sp ON s.ID = sp.StudentID;
+```
+
+---
+
+## `Join`
+
+### Usage Scenarios
+
+- **Relational Association:** Combine customers with orders, students with
+  departments, or products with categories—whenever matching keys connect two
+  datasets.
+- **Composite Key Mapping:** When matching requires a compound field (e.g.,
+  first name + last name).
+- **Data Enrichment:** Supplement a base dataset with additional attributes from
+  another source.
+- **Multiple Joins:** Multi-table equivalent merges for rich denormalized
+  outputs.
+
+---
+
+### Method Syntax Examples
+
+#### Standard Inner Join
+
+Associate customers with orders:
+
+```csharp
+var result = customers.Join(
+    orders,
+    customer => customer.Id,
+    order => order.CustomerId,
+    (customer, order) => new { customer.Name, order.OrderId }
+);
+
+foreach (var row in result)
+{
+    Console.WriteLine($"{row.Name}, {row.OrderId}");
+}
+```
+
+**Equivalent SQL:**
+
+```sql
+SELECT c.Name, o.OrderId
+FROM Customers c
+INNER JOIN Orders o ON c.Id = o.CustomerId;
+```
+
+#### Composite Key Join
+
+If joining on multiple fields:
+
+```csharp
+var result = employees.Join(
+    departments,
+    e => new { e.DepartmentId, e.Location },
+    d => new { d.DepartmentId, d.Location },
+    (e, d) => new { e.Name, d.Name }
+);
+```
+
+**Equivalent SQL:**
+
+```sql
+SELECT e.Name, d.Name
+FROM Employees e
+JOIN Departments d
+ON e.DepartmentId = d.DepartmentId AND e.Location = d.Location;
+```
+
+#### Three-Way Joins and Chaining
+
+Multi-stage joining:
+
+```csharp
+var result = students
+    .Join(departments,
+        s => s.DepartmentID, d => d.ID,
+        (student, department) => new { student, department })
+    .Join(teachers,
+        sd => sd.department.TeacherID, t => t.ID,
+        (sd, teacher) => new
+        {
+            StudentName = $"{sd.student.FirstName} {sd.student.LastName}",
+            DepartmentName = sd.department.Name,
+            TeacherName = $"{teacher.First} {teacher.Last}"
+        });
+
+foreach (var obj in result)
+{
+    Console.WriteLine($"{obj.StudentName} studies in {obj.DepartmentName}, led by {obj.TeacherName}");
+}
+```
+
+**Equivalent SQL:**
+
+```sql
+SELECT s.FirstName + ' ' + s.LastName, d.Name, t.First + ' ' + t.Last
+FROM Students s
+JOIN Departments d ON s.DepartmentID = d.ID
+JOIN Teachers t ON d.TeacherID = t.ID;
+```
+
+---
+
+### SQL Equivalent
+
+`Join` in LINQ is functionally equivalent to SQL's `INNER JOIN`, returning only
+the rows where matching keys are found on both sides.
+
+---
+
+## `GroupJoin`
+
+The **`GroupJoin`** method extends `Join` by pairing each element of an outer
+sequence with a collection of matching elements from an inner sequence, based on
+keys. The result is a hierarchical, parent-child or master-detail relationship
+where every outer item is always present, even if no matching inner elements
+exist (in which case the child collection is empty). This closely mirrors SQL’s
+`LEFT OUTER JOIN`, though LINQ’s output is nested rather than tabular.
+
+### Usage Scenarios
+
+- **Building Hierarchical Datasets:** Group employees per department, orders per
+  customer, or children per parent.
+- **Reporting and Grouped Outputs:** Display a list of categories, each with an
+  embedded group of products.
+- **Left Outer Join Semantics:** Include unmatched parent records gracefully,
+  with empty child collections.
+- **Efficiency in Parent-Child Traversals:** Rapidly traverse hierarchy
+  relationships.
+
+---
+
+### Method Syntax Examples
+
+#### Hierarchy Example: Departments with Employees
+
+Assuming:
+
+```csharp
+public class Department { public int ID; public string Name; }
+public class Employee { public int ID; public string Name; public int DepartmentId; }
+```
+
+```csharp
+var groupJoin = departments.GroupJoin(
+    employees,
+    dept => dept.ID,
+    emp => emp.DepartmentId,
+    (dept, emps) => new { dept, emps }
+);
+
+foreach (var item in groupJoin)
+{
+    Console.WriteLine("Department :" + item.dept.Name);
+    foreach (var employee in item.emps)
+    {
+        Console.WriteLine(" EmployeeID: " + employee.ID + " , Name: " + employee.Name);
+    }
+}
+```
+
+**Output:** Each department, followed by all employees in the department.
+
+#### Flat Join via GroupJoin + SelectMany
+
+To flatten hierarchical results to a sequence like `Join`:
+
+```csharp
+var flatJoin = departments
+    .GroupJoin(
+        employees,
+        dept => dept.ID,
+        emp => emp.DepartmentId,
+        (dept, emps) => new { dept, emps }
+    )
+    .SelectMany(
+        group => group.emps.DefaultIfEmpty(), // For left-outer join
+        (group, emp) => new { Department = group.dept.Name, EmployeeName = emp?.Name ?? "No Employee" }
+    );
+```
+
+---
+
+### SQL Equivalent
+
+- **Hierarchical group:** `LEFT JOIN` combined with GROUP BY, or simply a left
+  join when no aggregation is needed.
+
+```sql
+SELECT d.Name AS DepartmentName, e.ID AS EmployeeID, e.Name AS EmployeeName
+FROM Departments d
+LEFT JOIN Employees e ON d.ID = e.DepartmentId;
+```
+
+---
+
+## `GroupBy`
+
+### Usage Scenarios
+
+- **Aggregation by Category:** Total sales per region, employees per department,
+  etc.
+- **Data Deduplication:** Finding unique elements by property (e.g., first
+  product per name).
+- **Hierarchical Display:** Multi-level groupings—group by department, then by
+  role.
+- **Data Summarization:** Producing statistics like min, max, average per group.
+- **Analysis and Reporting:** Pivot-style grouping for dashboards.
+
+---
+
+### Method Syntax Examples
+
+#### Single Property Grouping
+
+Group students by branch:
+
+```csharp
+var groupedStudents = students.GroupBy(s => s.Branch);
+foreach (var group in groupedStudents)
+{
+    Console.WriteLine($"{group.Key}: {group.Count()}");
+    foreach (var student in group)
+    {
+        Console.WriteLine($" Name: {student.Name}, Age: {student.Age}, Gender: {student.Gender}");
+    }
+}
+```
+
+**SQL Equivalent:**
+
+```sql
+SELECT Branch, COUNT(*) FROM Students GROUP BY Branch;
+```
+
+#### Multiple Property Grouping (Composite Key)
+
+```csharp
+var grouped = sales.GroupBy(s => new { s.ProductId, Month = s.SaleDate.Month });
+foreach (var group in grouped)
+{
+    Console.WriteLine($"Product: {group.Key.ProductId} - Month: {group.Key.Month}");
+}
+```
+
+**SQL Equivalent:**
+
+```sql
+SELECT ProductId, MONTH(SaleDate) AS Month, SUM(Quantity)
+FROM Sales
+GROUP BY ProductId, MONTH(SaleDate)
+ORDER BY ProductId, Month;
+```
+
+#### Aggregation
+
+Calculate total amount per group:
+
+```csharp
+var totalAmountPerCustomer = orders
+    .GroupBy(o => o.CustomerId)
+    .Select(g => new { CustomerId = g.Key, TotalAmount = g.Sum(o => o.Amount) });
+
+foreach (var group in totalAmountPerCustomer)
+{
+    Console.WriteLine($"Customer {group.CustomerId} Total: {group.TotalAmount}");
+}
+```
+
+**SQL Equivalent:**
+
+```sql
+SELECT CustomerId, SUM(Amount) FROM Orders GROUP BY CustomerId;
+```
+
+#### Removing Duplicates by Property
+
+```csharp
+var distinctProducts = products.GroupBy(p => p.Name).Select(g => g.First()).ToList();
+```
+
+#### Nested Grouping (Multi-level)
+
+```csharp
+var byDeptAndRole = employees
+    .GroupBy(e => e.Department)
+    .Select(deptGroup => new
+        {
+            Department = deptGroup.Key,
+            Roles = deptGroup.GroupBy(e => e.Role)
+        });
+```
+
+---
+
+### SQL Equivalent
+
+- **GroupBy in LINQ** maps directly to SQL’s `GROUP BY`.
+- Aggregates are applied as in SQL—with methods like `Sum`, `Count`, `Min`, etc.
+
+---
+
+## `ToLookup`
+
+**ToLookup** creates a one-to-many index (lookup) from an `IEnumerable<T>`,
+mapping keys to collections of elements. This is conceptually similar to a
+`Dictionary<TKey, TValue>`, but allows to associate multiple values per
+key—making it excellent for fast, repeatable key-based retrievals.
+
+**The major difference from GroupBy:** ToLookup executes eagerly/immediately
+(consuming the source at invocation); GroupBy is deferred until enumeration.
+ToLookup’s results are indexed, supporting efficient, repeated lookups.
+
+### Usage Scenarios
+
+- **Efficient Key-Based Access:** When repeated or fast group lookups by key are
+  needed.
+- **Grouping Data for Read-Optimized Access:** Serve repeated reads in in-memory
+  reporting or API scenarios.
+- **Multiple Values per Key, including Duplicates:** Useful when the input can
+  have non-unique keys.
+- **Avoiding Deferred Execution Issues:** When you require stable groupings
+  after source changes.
+
+---
+
+### Method Syntax Examples
+
+#### Group By Single Key
+
+```csharp
+var branchLookup = students.ToLookup(s => s.Branch);
+
+foreach (var group in branchLookup)
+{
+    Console.WriteLine($"{group.Key} : {group.Count()}");
+    foreach (var student in group)
+    {
+        Console.WriteLine($" Name: {student.Name}, Age: {student.Age}, Gender: {student.Gender}");
+    }
+}
+```
+
+#### Group By Multiple Keys
+
+```csharp
+var branchGenderLookup = students.ToLookup(s => new { s.Branch, s.Gender });
+```
+
+#### Efficient Key Retrieval
+
+```csharp
+var departmentLookup = employees.ToLookup(e => e.Department);
+var itDepartmentEmployees = departmentLookup["IT"];
+```
+
+---
+
+### SQL Equivalent
+
+While SQL lacks a one-to-many dictionary structure, retrieving groups by key is
+done with:
+
+```sql
+SELECT Branch, Name, Age, Gender FROM Students ORDER BY Branch;
+```
+
+Efficient retrieval by key is typically achieved by filtering:
+
+```sql
+SELECT * FROM Students WHERE Branch = 'CSE';
+```
+
+**GroupBy in SQL follows the same logic but returns aggregates, not
+collections.**
+
+---
+
+## SQL `GROUP BY` Clause
+
+### Purpose and Basic Syntax
+
+```sql
+SELECT Country, COUNT(*) AS CustomerCount
+FROM Customers
+GROUP BY Country;
+```
+
+- All columns in the `SELECT` list should either be aggregated or appear in
+  `GROUP BY`.
+- If you omit an aggregate function, `GROUP BY` behaves like `SELECT DISTINCT`
+  for those columns but is rarely used this way in practice.
+- `GROUP BY` can be used with one or multiple columns (composite/grouping keys).
+
+---
+
+### Grouping by Multiple Columns (Composite Keys)
+
+Grouping by multiple columns increases granularity. Each unique combination of
+values constitutes a group.
+
+**Example – Count Orders by Country and City:**
+
+```sql
+SELECT Country, City, COUNT(*) AS NumOrders
+FROM Orders
+GROUP BY Country, City;
+```
+
+This produces a row for each unique `(Country, City)` combination, along with
+the count.
+
+---
+
+### Common Aggregate Functions Used with `GROUP BY`
+
+| Function | Description             | Example          |
+| -------- | ----------------------- | ---------------- |
+| COUNT()  | Number of rows in group | COUNT(\*)        |
+| SUM()    | Sum of values in group  | SUM(SalesAmount) |
+| AVG()    | Average value in group  | AVG(Age)         |
+| MIN()    | Smallest value in group | MIN(Price)       |
+| MAX()    | Largest value in group  | MAX(Score)       |
+
+**Example with Multiple Aggregates:**
+
+```sql
+SELECT Department,
+       COUNT(*) AS Headcount,
+       SUM(Salary) AS TotalSalary,
+       AVG(Salary) AS AvgSalary,
+       MIN(HireDate) AS EarliestHire
+FROM Employees
+GROUP BY Department;
+```
+
+---
+
+## SQL `HAVING` Clause
+
+### Purpose and Syntax
+
+The `HAVING` clause filters **groups after aggregation**, unlike `WHERE`, which
+filters rows before grouping.
+
+**Basic Syntax:**
+
+```sql
+SELECT column1, AGG_FUNC(column2)
+FROM table
+[WHERE condition]
+GROUP BY column1
+HAVING AGG_FUNC(column2) operator value
+[ORDER BY column1];
+```
+
+**Example – Find Products with Sales above 1,000 Units:**
+
+```sql
+SELECT ProductID, SUM(Quantity) AS TotalSold
+FROM OrderDetails
+GROUP BY ProductID
+HAVING SUM(Quantity) > 1000;
+```
+
+**Key Points:**
+
+- Use `HAVING` with aggregate functions (`SUM`, `COUNT`, etc.).
+- Use `WHERE` for filtering before aggregation.
+- It’s common to combine `WHERE` and `HAVING` for different filtering stages.
+
+---
+
+### Difference Between `WHERE` and `HAVING`
+
+| Aspect          | WHERE                       | HAVING                            |
+| --------------- | --------------------------- | --------------------------------- |
+| Applies To      | Individual rows (pre-group) | Groups (post-group)               |
+| Aggregate Funcs | Not allowed                 | Allowed (e.g., `SUM(...) > 100`)  |
+| Placement       | Before `GROUP BY`           | After `GROUP BY`                  |
+| Typical Usage   | Filter raw data             | Filter grouped/aggregated results |
+
+**Example Combining WHERE and HAVING:**
+
+```sql
+SELECT Country, SUM(Amount) AS TotalSales
+FROM Orders
+WHERE OrderDate >= '2024-01-01'
+GROUP BY Country
+HAVING SUM(Amount) > 5000;
+```
+
+---
+
+## LINQ Grouping: Method Syntax Equivalents
+
+### LINQ .NET Overview
+
+In C#, **LINQ** provides the `GroupBy` method for grouping, **mirroring SQL's
+`GROUP BY`**. You project and filter on the result using method syntax; **there
+is no direct `HAVING`**—instead, you'll use `.Where(...)` after grouping to
+filter on aggregate values.
+
+**Basics:**
+
+- `GroupBy` produces an `IGrouping<TKey, TSource>`, an enumerable for each group
+  with a `Key` property (the group key).
+- Aggregations are run on each group using LINQ extensions: `Count()`, `Sum()`,
+  `Average()`, `Min()`, `Max()`, etc.
+- To mimic `HAVING`, chain `.Where(...)` after `GroupBy`.
+
+---
+
+### **LINQ Method Syntax: Basic Grouping**
+
+#### Group by a Single Property
+
+```csharp
+var groups = data.GroupBy(item => item.Category);
+foreach (var group in groups)
+{
+    Console.WriteLine($"Category: {group.Key}, Count: {group.Count()}");
+}
+```
+
+#### Group by Composite Key (Multiple Properties)
+
+```csharp
+var groups = data.GroupBy(item => new { item.Department, item.ProductType });
+foreach (var group in groups)
+{
+    Console.WriteLine($"Dept: {group.Key.Department}, Type: {group.Key.ProductType}, Count: {group.Count()}");
+}
+```
+
+- Anonymous type as group key allows grouping by multiple columns, mirroring
+  `GROUP BY col1, col2` in SQL.
+
+---
+
+### **LINQ Aggregations Per Group**
+
+To compute aggregates for each group (e.g., total count, sum), project the
+results using `Select` after `GroupBy`.
+
+```csharp
+var summary = data.GroupBy(item => item.ProductType)
+    .Select(g => new
+    {
+        Type = g.Key,
+        Count = g.Count(),
+        TotalPrice = g.Sum(item => item.Price),
+        AvgPrice = g.Average(item => item.Price)
+    });
+
+foreach (var group in summary)
+{
+    Console.WriteLine($"Type: {group.Type}, Count: {group.Count}, Total: {group.TotalPrice}, Avg: {group.AvgPrice}");
+}
+```
+
+---
+
+### **Filtering Grouped Results (`HAVING`)**
+
+To filter groups by aggregate properties (i.e., LINQ equivalent of SQL
+`HAVING`):
+
+```csharp
+var result = data.GroupBy(item => item.ProductType)
+    .Where(g => g.Count() > 10)
+    .Select(g => new
+    {
+        Type = g.Key,
+        Count = g.Count()
+    });
+```
+
+Or for composite aggregate conditions:
+
+```csharp
+var result = data.GroupBy(item => new { item.Department, item.ProductType })
+    .Where(g => g.Sum(item => item.Sales) > 5000 && g.Average(item => item.Price) > 100)
+    .Select(g => new
+    {
+        g.Key.Department,
+        g.Key.ProductType,
+        TotalSales = g.Sum(item => item.Sales),
+        AvgPrice = g.Average(item => item.Price),
+    });
+```
+
+**This directly parallels `HAVING SUM(Sales) > 5000 AND AVG(Price) > 100` in
+SQL.**
+
+---
+
+### **Filter Data Before Grouping (`WHERE`)**
+
+Filter with `.Where` **before** `GroupBy` to restrict the data considered in
+grouping, just as `WHERE` is used in SQL:
+
+```csharp
+var filteredGroups = data
+    .Where(item => item.IsActive)
+    .GroupBy(item => item.Department)
+    .Select(g => new
+    {
+        Department = g.Key,
+        ActiveCount = g.Count()
+    });
+```
+
+Equivalent SQL:
+
+```sql
+SELECT Department, COUNT(*)
+FROM data
+WHERE IsActive = 1
+GROUP BY Department
+```
+
+---
+
+## Overview of SQL Join Types
+
+At its core, a **join** associates rows from two or more tables based on a
+specified relationship, typically involving keys. Each join variant has unique
+semantics, impacting what data is included in the result set. Understanding the
+output shape of each join is a prerequisite to effective SQL and LINQ usage.
+
+The five canonical SQL join types are summarized in the table below:
+
+| SQL Join Type    | Description                                                        |
+| ---------------- | ------------------------------------------------------------------ |
+| INNER JOIN       | Rows with matching keys in both tables only.                       |
+| LEFT OUTER JOIN  | All left table rows; right table data (if matched) or NULLs.       |
+| RIGHT OUTER JOIN | All right table rows; left table data (if matched) or NULLs.       |
+| FULL OUTER JOIN  | All rows from both tables, combining matched and unmatched.        |
+| CROSS JOIN       | Cartesian product: every row of Table A with every row of Table B. |
+
+It is important to note that while SQL natively supports all five, **LINQ** does
+not provide direct operators for RIGHT and FULL OUTER JOIN, requiring creative
+equivalents using available method syntax building blocks.
+
+---
+
+## INNER JOIN
+
+### SQL INNER JOIN: Syntax and Semantics
+
+**INNER JOIN** returns rows with matching values in both joined tables based on
+a specified predicate. Unmatched rows from either table are excluded from the
+result.
+
+**SQL Example:**
+
+```sql
+SELECT e.EmployeeName, d.DepartmentName
+FROM Employees e
+INNER JOIN Departments d ON e.DepartmentID = d.DepartmentID;
+```
+
+Only employees with a valid department mapping appear in the result.
+
+---
+
+### LINQ Method Syntax Equivalent
+
+In LINQ (method/fluent syntax), the direct equivalent is the `.Join()` method.
+This method projects each pair of matched elements from the two collections
+having matching keys.
+
+**LINQ Example:**
+
+```csharp
+var query = employees.Join(
+    departments,
+    employee => employee.DepartmentID,
+    department => department.DepartmentID,
+    (employee, department) => new {
+        EmployeeName = employee.Name,
+        DepartmentName = department.Name
+    }
+);
+```
+
+This code returns only pairs where the _employee_'s DepartmentID matches a
+_department_'s ID—precisely like SQL’s INNER JOIN.
+
+**Pattern Explanation:**
+
+- The join key selectors (`employee => employee.DepartmentID`, `department =>
+department.DepartmentID`) define how records relate.
+- The result selector (`(employee, department) => ...`) projects the shape of
+  the output.
+- Only records with key matches in both collections appear in the final
+  sequence.
+
+---
+
+**When to Use INNER JOIN (SQL or LINQ):**
+
+Use INNER JOINs when data from two sets/tables should be included only where
+there are mutual matches. Examples include finding orders that have a customer,
+or students registered in courses.
+
+**Performance Consideration:**
+
+In SQL databases, a well-tuned INNER JOIN typically performs efficiently,
+leveraging indexes on joined keys. In LINQ-to-Objects, `.Join()` is implemented
+as a hash join, offering O(n + m) performance, but ultimately depends on the
+underlying data structure.
+
+For data sources that are ultimately translated to SQL (e.g., via LINQ to SQL or
+EF Core), the generated SQL mirrors what you would hand-write in SQL.
+
+---
+
+## LEFT OUTER JOIN
+
+### SQL LEFT OUTER JOIN: Syntax and Semantics
+
+A **LEFT OUTER JOIN** returns all rows from the "left" table, along with
+matching rows from the "right" table, or NULLs for right-side columns where no
+match exists.
+
+**SQL Example:**
+
+```sql
+SELECT c.CustomerName, o.OrderID
+FROM Customers c
+LEFT JOIN Orders o ON c.CustomerID = o.CustomerID;
+```
+
+All customers are listed, with their orders if present, or NULL if none exist.
+
+---
+
+### LINQ Method Syntax Equivalent
+
+LINQ does not have a single method for left join, but the idiomatic approach
+uses a combination of `.GroupJoin()`, `.SelectMany()`, and `.DefaultIfEmpty()`:
+
+**LINQ Example:**
+
+```csharp
+var query = customers
+    .GroupJoin(
+        orders,
+        customer => customer.CustomerID,
+        order => order.CustomerID,
+        (customer, orderGroup) => new { customer, orderGroup }
+    )
+    .SelectMany(
+        x => x.orderGroup.DefaultIfEmpty(),
+        (x, order) => new {
+            CustomerName = x.customer.Name,
+            OrderID = order == null ? (int?)null : order.OrderID
+        }
+    );
+```
+
+**Pattern Explanation:**
+
+- `.GroupJoin()` groups orders for each customer.
+- `.SelectMany(..., (outer, inner) => ...)` flattens results, pairing each
+  customer with each of their orders.
+- `.DefaultIfEmpty()` provides a _null_ when there are no matching orders,
+  enabling the "outer" semantics.
+
+**This produces identical results to SQL's LEFT OUTER JOIN: every customer
+appears, orders may be null.**
+
+**Variants and Practical Example:**
+
+- Listing all departments, even those with no employees.
+- All customers, regardless of whether they have placed orders.
+
+---
+
+**When to Use a LEFT OUTER JOIN:**
+
+Left joins are ideal for preserving all items from your “primary” set, embedding
+details from a related set if available. Reporting scenarios (e.g., all users
+and last login activity, even if some never logged in) often use left joins.
+
+**Performance Considerations:**
+
+- On SQL Server and most databases, LEFT OUTER JOIN is efficiently implemented,
+  but can be more costly than INNER JOIN due to inclusion of non-matching rows.
+- In LINQ-to-SQL or EF Core, the above pattern is translated into proper SQL at
+  runtime. However, in LINQ-to-Objects, performance is similar to the nested
+  loop, but with optimizations through grouping (hashing).
+- If you use `.DefaultIfEmpty()` on large groups, be aware this can increase
+  memory usage.
+
+**Best Practice:** Filter as early as possible (before the join), not after;
+filtering post-join can sometimes inadvertently turn an OUTER join into an INNER
+join.
+
+---
+
+## RIGHT OUTER JOIN
+
+### SQL RIGHT OUTER JOIN: Syntax and Semantics
+
+A **RIGHT OUTER JOIN** returns all rows from the “right” table, plus matched
+rows from the “left”. Where there is no left match, columns from the left table
+are NULL.
+
+**SQL Example:**
+
+```sql
+SELECT o.OrderID, c.CustomerName
+FROM Orders o
+RIGHT JOIN Customers c ON o.CustomerID = c.CustomerID;
+```
+
+Equivalent to swapping the left/right roles in a left join; not all databases
+support RIGHT JOIN natively, but SQL Server, PostgreSQL, and Oracle all do.
+
+---
+
+### LINQ Method Syntax Equivalent
+
+**LINQ does not directly support RIGHT OUTER JOIN.** The idiomatic solution is
+to swap the input sets and apply the left join pattern:
+
+**LINQ Example:**
+
+```csharp
+var query = orders
+    .GroupJoin(
+        customers,
+        order => order.CustomerID,
+        customer => customer.CustomerID,
+        (order, customerGroup) => new { order, customerGroup }
+    )
+    .SelectMany(
+        x => x.customerGroup.DefaultIfEmpty(),
+        (x, customer) => new {
+            OrderID = x.order.OrderID,
+            CustomerName = customer?.Name ?? "No Customer"
+        }
+    );
+```
+
+- Here, `orders` (right table in SQL) becomes the primary source.
+- Applying `.GroupJoin` and `.SelectMany` as per left join semantics returns all
+  orders, and their customers if any.
+- For a “true” right join (as in SQL), you would typically reverse the tables
+  from the left join pattern. That is, to achieve `A RIGHT JOIN B`, perform `B
+LEFT JOIN A`.
+
+**Use Case:** Report all products, even those never ordered, by right joining
+orders to products.
+
+---
+
+**When to Use RIGHT OUTER JOINs:**
+
+Use when you wish to preserve all records from the “secondary” table and include
+primary data where available. For example, products without sales, content
+without comments.
+
+**Performance and Practical Notes:**
+
+- In SQL, a RIGHT JOIN is just a syntactic mirror of LEFT JOIN; the query
+  optimizer can freely reorder.
+- In LINQ-to-Objects, there is no functional distinction; reverse the collection
+  order to simulate right join.
+- In practice, RIGHT JOIN is less commonly needed because its requirements can
+  nearly always be met via rewritten LEFT JOINs with table order reversed.
+
+---
+
+## FULL OUTER JOIN
+
+### SQL FULL OUTER JOIN: Syntax and Semantics
+
+A **FULL OUTER JOIN** returns all rows from both tables: matches where possible,
+and NULL-filled “outer” rows from both sides where no match exists.
+
+**SQL Example:**
+
+```sql
+SELECT a.ID, a.Name, b.Value
+FROM TableA a
+FULL OUTER JOIN TableB b ON a.ID = b.ID;
+```
+
+- All combinations of A and B, with NULLs where no corresponding data exists.
+
+---
+
+### LINQ Method Syntax Equivalent
+
+**LINQ does not have a built-in operator for FULL OUTER JOIN**. It must be
+emulated by combining LEFT and RIGHT OUTER JOINs and removing duplicates (i.e.,
+union the two sets and filter for uniqueness):
+
+**LINQ Example:**
+
+```csharp
+// Left Outer Join: all from A, matches from B
+var left = asList
+    .GroupJoin(
+        bsList,
+        a => a.ID,
+        b => b.ID,
+        (a, groupB) => new { a, groupB }
+    )
+    .SelectMany(
+        ab => ab.groupB.DefaultIfEmpty(),
+        (ab, b) => new { A = ab.a, B = b }
+    );
+
+// Right Outer Join: all from B, matches from A (to find B's unmatched)
+var right = bsList
+    .GroupJoin(
+        asList,
+        b => b.ID,
+        a => a.ID,
+        (b, groupA) => new { b, groupA }
+    )
+    .SelectMany(
+        ba => ba.groupA.DefaultIfEmpty(),
+        (ba, a) => new { A = a, B = ba.b }
+    )
+    .Where(x => x.A == null);
+
+// FULL OUTER JOIN: union results, avoiding duplicates
+var fullOuterJoin = left.Union(right);
+```
+
+**Pattern Explanation:**
+
+- Perform a left outer join from A to B, grabbing all A’s and their
+  corresponding B’s (or NULL).
+- Perform a left outer join from B to A, grabbing all B’s and their A’s, but
+  keep only those where A is NULL (i.e., those not already in the previous
+  result).
+- Union both results for the complete FULL OUTER JOIN effect.
+
+**Use Cases:**
+
+- Comparing datasets from two sources to find overlaps and differences.
+- Merging data where neither table can be considered primary.
+
+**Performance Consideration:**
+
+- FULL OUTER JOINs can be expensive since both tables must be scanned.
+- In LINQ, care must be taken to avoid unnecessary recomputation; the union
+  operation’s performance depends on the key selector and set size.
+
+---
+
+**Notes:**
+
+- In databases not supporting native FULL OUTER JOIN (e.g., MySQL), this pattern
+  can be simulated using LEFT JOIN, RIGHT JOIN, and UNION.
+- For large datasets, attention to set uniqueness and memory usage is critical.
+
+---
+
+## CROSS JOIN
+
+### SQL CROSS JOIN: Syntax and Semantics
+
+A **CROSS JOIN** produces the Cartesian product: every row of the first table,
+paired with every row of the second table.
+
+**SQL Example:**
+
+```sql
+SELECT a.Name, b.Value
+FROM TableA a
+CROSS JOIN TableB b;
+```
+
+If A has _m_ rows and B has _n_ rows, the result contains m × n rows.
+
+---
+
+### LINQ Method Syntax Equivalent
+
+LINQ does not require a dedicated method for CROSS JOIN; use `.SelectMany()` on
+the outer sequence to project each element to the entire inner sequence,
+returning the flattened result:
+
+**LINQ Example:**
+
+```csharp
+var crossJoin = listA.SelectMany(
+    a => listB,
+    (a, b) => new { A = a, B = b }
+);
+```
+
+**Pattern Explanation:**
+
+- Each element `a` in `listA` is paired with every element `b` in `listB`,
+  generating the Cartesian product—a cross join.
+
+**Practical Examples:**
+
+- Generating scheduling slots for every employee and every shift.
+- All possible product-category pairs.
+
+**Performance Considerations:**
+
+- For large collections, the cross join creates rapidly growing output (n × m).
+  Use cautiously to avoid memory explosions.
+
+**Best Practice:** Avoid unless every possible combination is genuinely
+required.
+
+---
+
+## Comparative Table: SQL Joins and LINQ Method Syntax Equivalents
+
+| SQL Join Type    | SQL Example                   | LINQ Method Syntax Example                                                    |
+| ---------------- | ----------------------------- | ----------------------------------------------------------------------------- |
+| INNER JOIN       | `A INNER JOIN B ON a.ID=b.ID` | `A.Join(B, a => a.ID, b => b.ID, (a, b) => ...)`                              |
+| LEFT OUTER JOIN  | `A LEFT JOIN B ON a.ID=b.ID`  | `A.GroupJoin(B, ..., (a, gB) => ...).SelectMany(... gB.DefaultIfEmpty() ...)` |
+| RIGHT OUTER JOIN | `A RIGHT JOIN B ON a.ID=b.ID` | `B.GroupJoin(A, ..., (b, gA) => ...).SelectMany(... gA.DefaultIfEmpty() ...)` |
+| FULL OUTER JOIN  | `A FULL JOIN B ON a.ID=b.ID`  | Combine above two and Union unique results                                    |
+| CROSS JOIN       | `A CROSS JOIN B`              | `A.SelectMany(a => B, (a, b) => ...)`                                         |
+
+Each LINQ code snippet reflects the general idiom but can be adjusted for custom
+result projection or key construction.
+
+---
+
+## When to Use Each Join Type and Potential Pitfalls
+
+### INNER JOIN
+
+- Use when only records existing in both collections are meaningful.
+- For normalized data and aggregated reporting.
+- **Pitfall:** Missing non-matching data; always ensure you don't need unmatched
+  records.
+
+### LEFT OUTER JOIN
+
+- Use when you need all records from your principal collection, optionally
+  enriched with matches.
+- Reporting, soft-matching, optional relationships.
+- **Pitfall:** Filtering in the wrong place (after the join) might convert left
+  joins to inner joins inadvertently.
+
+### RIGHT OUTER JOIN
+
+- Situations are rare in practice; usually solved by reversing sides of LEFT
+  JOIN.
+- **Pitfall:** Misunderstanding the directionality of data inclusion.
+
+### FULL OUTER JOIN
+
+- When merging disparate sources, or for comprehensive accuracy checks/audits.
+- **Pitfall:** High resource consumption, potential for very sparse (mostly
+  null-filled) rows.
+
+### CROSS JOIN
+
+- For all combinations, such as every user × every permission.
+- **Pitfall:** Combinatorial explosion—use strict filters or avoid unless
+  necessary.
+
+---
+
+## Advanced LINQ Join Patterns
+
+### Composite Key Joins
+
+LINQ supports joins on multiple keys by selecting an anonymous object as a key:
+
+```csharp
+A.Join(
+    B,
+    a => new { a.Key1, a.Key2 },
+    b => new { b.Key1, b.Key2 },
+    (a, b) => new { a, b }
+);
+```
+
+_Useful for scenarios where natural/key integrity is based on multiple columns._
+
+---
+
+### Grouped Joins and Hierarchies
+
+`.GroupJoin()` also enables return of hierarchical results: one “parent” object
+with a set of “child” objects. This is formally called a grouped join, which is
+akin to a SQL aggregation or navigation property:
+
+```csharp
+var query = departments.GroupJoin(
+    employees,
+    dept => dept.DepartmentID,
+    emp => emp.DepartmentID,
+    (dept, emps) => new { dept, Employees = emps }
+);
+```
+
+_Hierarchical display of departments and their employees is a typical use case._
+
+---
+
+## Performance Considerations: SQL vs LINQ
+
+### SQL Joins
+
+- The SQL query optimizer chooses the best algorithm (hash join, merge join,
+  nested loop) based on data size, indexes, and stats.
+- **Indexes on join keys are critical** for efficient execution.
+- Using SQL query execution plans (`EXPLAIN`) aids optimization.
+
+**Best Practices:**
+
+- Filter data before joining when possible.
+- Avoid selecting unnecessary columns (avoid `SELECT *`).
+- Use explicit `JOIN` ... `ON` syntax for clarity and optimizer support.
+
+---
+
+### LINQ Joins
+
+LINQ’s internal join method behaviors depend on the underlying data source:
+
+- **LINQ to Objects:** `.Join()` is implemented efficiently as a hash join—good
+  for large in-memory collections.
+- **LINQ to SQL/Entities:** LINQ expressions are translated to SQL, so
+  performance mapping is as per the target RDBMS.
+- **Deferred Execution:** LINQ queries are lazy; they execute only upon
+  enumeration, which allows for further chaining of filters or projections.
+
+**Pitfalls:**
+
+- In LINQ-to-Objects, repeated enumeration of collections (in loops or nested
+  queries) is slow for large data if not using hashes/dictionaries.
+- Beware of `IEnumerable` vs. `IQueryable`: the former operates in memory, the
+  latter is translated to SQL—the distinction is huge for data size and network
+  round-trips.
+- Avoid value manipulations or computations inside LINQ lambda joins—these can
+  defeat translations and optimizations.
+
+---
+
+## 1. LINQ Expression Tree Fundamentals
+
+Expression trees in .NET are tree-like data structures representing code—usually
+in the form of lambda expressions—as objects, where each node is an expression,
+such as a parameter, method call, or binary operation. At runtime, expression
+trees can be created, traversed, manipulated, and (in many scenarios) compiled
+into executable delegates. This architecture enables a level of meta-programming
+and code-as-data, facilitating dynamic behavior hard to achieve through standard
+compiled code.
+
+### 1.1. What Is an Expression Tree?
+
+An **expression tree** represents code in the form of a data structure. In
+practical C#, this means that something as familiar as a method or lambda
+expression can be reflected as a tree of objects—each representing a constant,
+variable, method call, or binary operator. This is distinct from simply having
+code compiled into IL and executed. The implications are profound: by working
+with trees, LINQ providers and libraries can examine, rewrite, and translate
+your code before it ever executes.
+
+A typical expression tree for a simple addition could look like:
+
+```csharp
+// Automatically created by the C# compiler:
+Expression<Func<int, int, int>> expr = (x, y) => x + y;
+```
+
+Alternatively, an equivalent expression tree can be constructed **manually**:
+
+```csharp
+ParameterExpression x = Expression.Parameter(typeof(int), "x");
+ParameterExpression y = Expression.Parameter(typeof(int), "y");
+BinaryExpression sum = Expression.Add(x, y);
+Expression<Func<int, int, int>> expr = Expression.Lambda<Func<int, int, int>>(sum, x, y);
+```
+
+Here, the **Expression** class in `System.Linq.Expressions` acts as a factory
+for expression nodes. The resulting tree can then be compiled and invoked.
+
+---
+
+### 1.2. Lambda Expressions, Delegates, and Expression Trees
+
+- **Lambda expressions** in method syntax (`x => x * x`) can be converted to
+  either:
+  - **Delegates** (i.e., `Func<T>` or `Action<T>`)—runtime executable code.
+  - **Expression trees** (i.e., `Expression<Func<T>>`)—a data structure
+    describing the code, not immediately executable, but available for
+    analysis or translation.
+
+The distinction is critical:
+
+- When you use a LINQ method on an in-memory collection (`IEnumerable<T>`), the
+  predicate is a **delegate**.
+- When you use LINQ on a queryable provider (`IQueryable<T>`), the predicate is
+  an **expression tree**—enabling query translation (e.g., to SQL in EF Core).
+
+**Example:** Assignment to `Func<T, TResult>` creates a compiled delegate.
+Assignment to `Expression<Func<T, TResult>>` builds an expression tree.
+
+---
+
+### 1.3. Expression Trees: Method Syntax vs Query Syntax
+
+In C# LINQ, both **method syntax** and **query syntax** ultimately produce the
+same underlying expression trees or delegates. However, from the perspective of
+expression trees and provider translation, method syntax is often the clearer,
+more direct representation; and in code samples below, method syntax is used
+exclusively as requested.
+
+**Example:**
+
+```csharp
+var results = myQueryable.Where(x => x.IsActive).OrderBy(x => x.Name);
+```
+
+This syntax accepts an `Expression<Func<T, bool>>` for `Where` when applied to
+an `IQueryable<T>`, and generates expression trees.
+
+---
+
+### 1.4. Automatic Generation of Expression Trees
+
+C# automatically generates expression trees when a lambda expression is assigned
+to a variable of type `Expression<TDelegate>`.
+
+```csharp
+Expression<Func<Person, bool>> isAdult = person => person.Age >= 18;
+```
+
+The compiler builds an expression tree representing this predicate.
+
+---
+
+## 2. Constructing Expression Trees
+
+### 2.1. Automatic Expression Trees from Lambdas
+
+For most common LINQ scenarios, developers rely on the compiler to convert
+lambdas into expression trees as arguments to method syntax LINQ operators.
+
+```csharp
+IQueryable<Person> query = dbContext.Persons
+    .Where(p => p.FirstName == "Alice" && p.Age > 25)
+    .OrderBy(p => p.LastName);
+```
+
+In LINQ to Entities, this creates a tree rather than a delegate, enabling
+translation to SQL.
+
+---
+
+### 2.2. Manual Construction of Expression Trees
+
+For scenarios involving dynamic queries or programmatically constructed logic,
+you must build expression trees manually.
+
+**Manual construction follows these steps:**
+
+1. **Create ParameterExpression** objects for lambda arguments:
+   ```csharp
+   var param = Expression.Parameter(typeof(Person), "p");
+   ```
+2. **Access Properties** using `Expression.Property`:
+   ```csharp
+   var age = Expression.Property(param, "Age");
+   ```
+3. **Create Constants** using `Expression.Constant`:
+   ```csharp
+   var ageValue = Expression.Constant(30);
+   ```
+4. **Build Operations** (e.g., comparison):
+   ```csharp
+   var predicate = Expression.GreaterThanOrEqual(age, ageValue);
+   ```
+5. **Wrap in a Lambda Expression:**
+   ```csharp
+   var lambda = Expression.Lambda<Func<Person, bool>>(predicate, param);
+   ```
+
+**Practical Example:** Build a filter on any property dynamically:
+
+```csharp
+// Filter persons by FirstName at runtime
+public static Expression<Func<Person, bool>> CreateFilter(string propertyName, object value)
+{
+    var param = Expression.Parameter(typeof(Person), "p");
+    var member = Expression.Property(param, propertyName);
+    var constant = Expression.Constant(value);
+    var body = Expression.Equal(member, constant);
+    return Expression.Lambda<Func<Person, bool>>(body, param);
+}
+```
+
+**Usage:**
+
+```csharp
+var predicate = CreateFilter("FirstName", "Alice");
+var query = persons.Where(predicate);
+```
+
+This is essential for building advanced, user-driven, or metadata-driven
+filtering interfaces.
+
+---
+
+### 2.3. Complex Dynamic Query Generation
+
+Expression trees are also employed for more complex search scenarios:
+
+- Multiple conditions (AND/OR)
+- Nested properties (e.g., `p.Address.City == "Berlin"`)
+- Method calls (e.g., `Contains`, `StartsWith`)
+
+**Example – Build a dynamic AND expression:**
+
+```csharp
+public static Expression<Func<Person, bool>> BuildAndFilter(IDictionary<string, object> filters)
+{
+    var param = Expression.Parameter(typeof(Person), "p");
+    Expression? body = null;
+    foreach (var filter in filters)
+    {
+        var member = Expression.Property(param, filter.Key);
+        var constant = Expression.Constant(filter.Value);
+        var equals = Expression.Equal(member, constant);
+        body = body == null ? equals : Expression.AndAlso(body, equals);
+    }
+    return Expression.Lambda<Func<Person, bool>>(body!, param);
+}
+```
+
+**Usage:**
+
+```csharp
+var filters = new Dictionary<string, object> { {"FirstName", "Bob"}, {"Age", 40} };
+var expr = BuildAndFilter(filters);
+```
+
+This produces a predicate equivalent to `p => p.FirstName == "Bob" && p.Age ==
+40`.
+
+**Example – Nested property:**
+
+```csharp
+Expression member = param;
+foreach (var namePart in "Address.City".Split('.'))
+    member = Expression.Property(member, namePart);
+```
+
+---
+
+### 2.4. Visiting and Modifying Expression Trees: ExpressionVisitor
+
+Expression trees are **immutable**. To "modify" them (e.g., to rewrite parts for
+logging, optimization, or translation), you must construct a new tree by
+traversing and replacing nodes.
+
+**System.Linq.Expressions.ExpressionVisitor** provides a powerful and extensible
+mechanism for this task.
+
+**Example – Visitor pattern to change all AND to OR:**
+
+```csharp
+public class AndToOrExpressionVisitor : ExpressionVisitor
+{
+    protected override Expression VisitBinary(BinaryExpression node)
+    {
+        if (node.NodeType == ExpressionType.AndAlso)
+            return Expression.MakeBinary(ExpressionType.OrElse, node.Left, node.Right, node.IsLiftedToNull, node.Method);
+        return base.VisitBinary(node);
+    }
+}
+```
+
+**Usage:**
+
+```csharp
+Expression<Func<Person, bool>> expr = p => p.Age > 30 && p.Name.StartsWith("A");
+var modified = new AndToOrExpressionVisitor().Visit(expr);
+```
+
+This would yield a predicate where `&&` becomes `||`.
+
+---
+
+### 2.5. Execution and Compilation of Expression Trees
+
+Not all expression trees are directly executable. Only those representing lambda
+expressions (`Expression<TDelegate>`) can be compiled and invoked:
+
+```csharp
+Expression<Func<int, int, int>> sum = (x, y) => x + y;
+Func<int, int, int> compiled = sum.Compile();
+int result = compiled(2, 3); // result == 5
+```
+
+For scenarios such as in-memory filtering after dynamic construction, this is
+invaluable.
+
+**Performance Note:** Creating and compiling expression trees incurs overhead;
+thus, caching compiled delegates for reuse is a best practice.
+
+---
+
+### 2.6. Expression Trees in LINQ Providers and Query Translation
+
+When you call a LINQ operator such as `.Where` with a predicate of type
+`Expression<Func<T, bool>>` on an `IQueryable<T>`, the provider (e.g., EF Core,
+MongoDB Driver) receives the expression tree and parses its nodes to generate an
+appropriate query (like SQL or MongoDB query language).
+
+**Translation Example:**
+
+```csharp
+var query = dbContext.Persons.Where(p => p.Age >= 18 && p.FirstName.StartsWith("A"));
+```
+
+- The expression tree representing the predicate is parsed by the provider,
+- Each node (e.g., property access, method call) is mapped to the relevant SQL
+  or provider-specific operation,
+- The eventual SQL might be:
+  ```sql
+  SELECT * FROM Persons WHERE Age >= 18 AND FirstName LIKE 'A%'
+  ```
+- This dynamic enables LINQ’s "write once, run anywhere" philosophy; you can
+  build queries against in-memory objects, SQL, XML, or web APIs using identical
+  code structures.
+
+---
+
+## 3. Dynamic Query Generation with Expression Trees
+
+### 3.1. Motivation and Real-World Scenarios
+
+Dynamic query generation becomes essential when:
+
+- Query logic depends on user input or metadata,
+- Filters, sorts, and projections are not known until runtime,
+- Frameworks want to provide extensible querying APIs (e.g., OData,
+  Elasticsearch clients, data grid filters),
+- Building business rules or plugin architectures where external code or
+  policies drive filtering.
+
+**Examples include:**
+
+- Web APIs supporting search/filtering on arbitrary fields,
+- Admin portals with metadata-driven dashboards,
+- Reporting tools that let users define custom views.
+
+---
+
+### 3.2. Building Complex Queries at Runtime
+
+Expression trees enable dynamic composition:
+
+```csharp
+IQueryable<Product> query = context.Products;
+
+if (minPrice.HasValue)
+{
+    var min = Expression.Constant(minPrice.Value);
+    var priceProp = Expression.Property(param, nameof(Product.Price));
+    var minPred = Expression.GreaterThanOrEqual(priceProp, min);
+    // Combine into lambda and use in Where
+}
+
+if (categories != null && categories.Any())
+{
+    // Build an OrElse chain for each category
+}
+```
+
+These constructs allow you to progressively extend queries, often using helper
+methods to ensure readability and composability.
+
+---
+
+### 3.3. Dynamic LINQ Providers and Query Translation
+
+LINQ providers must traverse (visit) the expression tree for:
+
+- Parsing method calls, operator expressions, and constants,
+- Mapping properties and values to data source fields,
+- Handling translation differences (e.g., C# `Contains` → SQL `LIKE`, method
+  calls on enums),
+- Optimizing, rewriting, or inlining expressions for performance.
+
+Custom LINQ providers can be written using this infrastructure; for example,
+query translation for custom databases or APIs can be achieved by walking and
+rewriting expression trees using visitors or interpreters.
+
+---
+
+## 4. Expression Tree Visitor and Advanced Modification
+
+### 4.1. ExpressionVisitor Class
+
+The `ExpressionVisitor` base class provides traversal and node-rewriting
+callbacks for all expression node types (e.g., `VisitBinary`, `VisitMethodCall`,
+etc.).
+
+**Use-cases:**
+
+- Optimizing queries (e.g., constant folding, expression rewriting),
+- Logging or analyzing query structure,
+- Translating expressions to other languages (SQL, JavaScript, Elasticsearch
+  DSL),
+- Implementing cross-cutting concerns (e.g., security, soft-deletes,
+  multi-tenancy).
+
+**Example – SQL translation visitor:**
+
+```csharp
+protected override Expression VisitBinary(BinaryExpression b)
+{
+    sb.Append("(");
+    Visit(b.Left);
+    switch (b.NodeType)
+    {
+        case ExpressionType.And: sb.Append(" AND "); break;
+        case ExpressionType.Equal: sb.Append(" = "); break;
+        // ... others omitted for brevity
+    }
+    Visit(b.Right);
+    sb.Append(")");
+    return b;
+}
+```
+
+**Result:** The visitor produces a SQL WHERE clause equivalent to the original
+predicate.
+
+---
+
+### 4.2. Limitations of Expression Trees
+
+While powerful, expression trees are not a full reflection of C# syntax—they do
+not support:
+
+- Statement lambdas (multi-line lambdas),
+- Loops and control flow,
+- Exception-handling blocks,
+- C# features such as pattern matching or local functions,
+- Async/await,
+- Some complex object initializations,
+- Delegates with variable/optional/named arguments.
+
+This restriction ensures compatibility and stability for query translation
+across different providers and versions.
+
+---
+
+## 5. Expression Tree Execution and Compilation
+
+### 5.1. Compiling and Executing Expression Trees
+
+After building an expression tree (either automatically by the compiler or
+manually), you can _compile_ it into a delegate:
+
+```csharp
+Expression<Func<int, int, int>> add = (x, y) => x + y;
+Func<int, int, int> compiled = add.Compile();
+int result = compiled(2, 2); // Output: 4
+```
+
+- Expression trees compiled into delegates execute with similar speed as
+  idiomatic lambdas
+- Compilation incurs upfront cost; cache delegates for repeated invocation.
+
+**Performance:** Compilation is slower than static code execution initially but
+negligible once the delegate is cached. Techniques such as
+[FastExpressionCompiler](https://github.com/dadhi/FastExpressionCompiler)
+significantly reduce compilation overhead for highly dynamic scenarios.
+
+---
+
+### 5.2. Limitations in Execution
+
+- Compiling executes local, in-memory logic. For LINQ providers like Entity
+  Framework, only delegates that can be translated to a supported query will
+  work—compiling and invoking only operates against in-memory objects
+  (IEnumerable), not remote sources (IQueryable).
+- If objects referenced by closures are disposed before delegate execution,
+  runtime exceptions can occur.
+- Expressions referencing types or methods unavailable at runtime (due to
+  trimming, AOT, or deployment differences) will fail to compile or execute.
+
+---
+
+## 6. Compiled Queries: Concept, Benefits, and Method Syntax Implementation
+
+### 6.1. What Are Compiled Queries?
+
+A **compiled query** is a LINQ query whose structure is parsed, analyzed, and
+compiled (usually into a delegate) just once and then reused multiple times with
+different parameter values. This is especially significant in data-access
+scenarios—where query parsing and translation to SQL can contribute substantial
+startup cost on each call.
+
+**Benefits:**
+
+- **Performance:** Eliminates repeated parsing/translation, especially in large
+  enterprise apps with high query volume.
+- **Reusability:** For queries with the same structure but different parameter
+  values, minimizes system resource usage.
+
+Compiled queries are particularly valuable in ORM frameworks and LINQ providers
+(like Entity Framework Core), where each query potentially triggers translation,
+plan generation, and caching costs.
+
+---
+
+### 6.2. When to Use Compiled Queries
+
+- The query logic/shape is known and unchanging but parameters may vary.
+- The query is _executed frequently_ with different arguments.
+- Performance profiling indicates repeated query translation is a significant
+  cost.
+- Scenarios such as web APIs, background processing, and data pipelines, where
+  certain queries are executed on virtually every request.
+
+**Caveats:**
+
+- Compiled queries are less beneficial for highly variable or one-off queries.
+- Not all features (e.g., Contains on in-memory collections) are compatible with
+  compiled queries.
+- There can be a small memory overhead as compiled queries are cached for
+  duration in static fields.
+
+---
+
+### 6.3. Implementing Compiled Queries with Method Syntax
+
+**Entity Framework (classic and Core) and LINQ to SQL provide APIs for compiling
+queries.**
+
+#### 6.3.1. Entity Framework 6 / LINQ to Entities
+
+```csharp
+static readonly Func<MyDbContext, decimal, IQueryable<Order>> compiledQuery =
+    CompiledQuery.Compile(
+        (MyDbContext ctx, decimal minAmount) =>
+            ctx.Orders.Where(order => order.Total >= minAmount)
+    );
+
+using (var context = new MyDbContext())
+{
+    var result = compiledQuery(context, 1000m).ToList();
+}
+```
+
+- Query is compiled on first use; subsequent invocations reuse the query plan.
+- Only 16 parameters allowed; further arguments require a structure.
+
+#### 6.3.2. Entity Framework Core (since 2.0)
+
+```csharp
+private static readonly Func<MyDbContext, string, IEnumerable<Customer>> getByCountry =
+    EF.CompileQuery(
+        (MyDbContext ctx, string country) =>
+            ctx.Customers.Where(c => c.Country == country));
+
+using (var context = new MyDbContext())
+{
+    var result = getByCountry(context, "USA").ToList();
+}
+```
+
+- Supports both synchronous (`CompileQuery`) and asynchronous
+  (`CompileAsyncQuery`)
+- Used primarily when queries are invariants across requests.
+
+#### 6.3.3. Manual Compilation Pattern
+
+```csharp
+Expression<Func<Person, bool>> expr = p => p.Age > 20;
+Func<Person, bool> predicate = expr.Compile(); // now reusable
+```
+
+Can be used to precompile any expression tree, not just those part of a query
+provider.
+
+---
+
+### 6.4. Compiled Queries: Usage Scenarios and Limitations
+
+| Scenarios            | Best For                                    | Limitations                    |
+| -------------------- | ------------------------------------------- | ------------------------------ |
+| High-frequency calls | Caching expensive query parsing/translation | Only supports static structure |
+| Data access layers   | Strongly-typed reusable query APIs          | Cannot change query shape      |
+| Web APIs             | Anonymized, parameterized query logic       | Only primitive parameters      |
+| Repos/services       | Separation of query logic/versioning        | Must be called consistently    |
+
+**Critical Note:** Composing further LINQ operators or projections on _results_
+of compiled queries (e.g., adding `.Where()` after compiling) often breaks query
+caching and should be avoided—always parameterize _in_ the compiled expression
+itself.
+
+---
+
+### 6.5. Best Practices
+
+- Declare compiled query delegates as `static readonly Func<...>`.
+- Use method syntax and avoid further query chaining after compilation.
+- Prefer compiled queries only for well-established, repeated workload paths.
+- In EF Core, use pooling (`AddDbContextPool`) to maximize cache re-use.
+- Avoid compiled queries for ad-hoc or sporadic queries.
+
+---
+
+## 7. Performance and Limitations of Expression Trees and Compiled Queries
+
+### 7.1. Performance Characteristics
+
+- Expression tree compilation is a one-time cost, making repeated execution
+  efficient.
+- Execution speed for compiled delegates is close to that of equivalent compiled
+  code.
+- For high-frequency or performance-critical operations, consider
+  high-performance libraries like FastExpressionCompiler, which can reduce
+  compilation overhead by 10-40x.
+- The cost and benefit curve depends on usage pattern: the more
+  repeated/frequent a query or logic, the more benefit from compilation.
+
+**Empirical results:** Benchmarks report negligible runtime difference after
+compilation between compiled delegates, expression lambdas, and manually coded
+methods (see [Code Maze, Stack Overflow]).
+
+---
+
+### 7.2. Limitations
+
+- Not all C# features are expressible or translatable in expression trees (see
+  §4.2 above).
+- Expression trees cannot handle certain dynamic or context-specific scenarios.
+- Logging, debugging, and stack traces can be harder to read in dynamically
+  compiled tree code.
+- Compiled queries must be static in shape—dynamic queries cannot take advantage
+  of pre-compilation (though NativeAOT and pre-compilation in upcoming .NET
+  versions are expected to improve this).
+
+---
+
+## 8. Practical Code Examples (Method Syntax Only)
+
+### 8.1. Simple Filter Using Expression Tree (Method Syntax)
+
+```csharp
+Expression<Func<Person, bool>> isOver30 = p => p.Age > 30;
+var filtered = context.People.Where(isOver30);
+```
+
+### 8.2. Dynamic Filter Construction
+
+```csharp
+public static Expression<Func<T, bool>> PropertyEquals<T>(string property, object value)
+{
+    var param = Expression.Parameter(typeof(T), "x");
+    var left = Expression.Property(param, property);
+    var right = Expression.Constant(value);
+    var body = Expression.Equal(left, right);
+    return Expression.Lambda<Func<T, bool>>(body, param);
+}
+
+// Usage
+var predicate = PropertyEquals<Person>("LastName", "Smith");
+var query = people.Where(predicate);
+```
+
+### 8.3. Compiled Query in EF Core
+
+```csharp
+public static readonly Func<MyDbContext, int, IEnumerable<Customer>> CustomersByCityId =
+    EF.CompileQuery(
+        (MyDbContext ctx, int cityId) =>
+            ctx.Customers.Where(c => c.CityId == cityId));
+
+IEnumerable<Customer> customers = CustomersByCityId(context, 1001);
+```
+
+### 8.4. Combining Multiple Dynamic Filters
+
+```csharp
+var filters = new Dictionary<string, object>
+{
+    { "FirstName", "Alice" },
+    { "Age", 27 }
+};
+
+Expression<Func<Person, bool>> expr = BuildAndFilter(filters);
+var ids = people.Where(expr).Select(p => p.Id); // Method syntax
+```
+
+### 8.5. Expression Tree Visitor for Custom Analysis
+
+```csharp
+public class NodeCountingExpressionVisitor : ExpressionVisitor
+{
+    private int _count = 0;
+    public int NodeCount => _count;
+
+    public override Expression Visit(Expression node)
+    {
+        if (node != null) _count++;
+        return base.Visit(node);
+    }
+}
+
+// Usage
+var expr = (Expression<Func<int, int, int>>)((x, y) => x + y);
+var visitor = new NodeCountingExpressionVisitor();
+visitor.Visit(expr);
+Console.WriteLine($"Node count: {visitor.NodeCount}");
+```
+
+---
