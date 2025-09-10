@@ -90,6 +90,132 @@ title: HTTP
 | Migration support     | No                   | No                     | Yes (via connection IDs)                   |
 | Typical latency       | Higher               | Lower than 1.1         | Lower than 2; especially on lossy/wireless |
 
+## HPACK Header Compression
+
+HTTP/2 improves bandwidth efficiency and reduces request latency via **HPACK**,
+a new header compression mechanism tailored for HTTP headers. With
+ever-increasing header redundancy (due to cookies, user-agents, etc.) and
+repetitive transmission of the same fields across page requests, uncompressed
+headers consume significant bandwidth.
+
+HPACK achieves compact, secure header compression by:
+
+- Using static and dynamic header tables
+- Employing a canonical Huffman encoding for string literals
+- Avoiding vulnerabilities like the CRIME attack that affected generic
+  compression schemes such as DEFLATE.
+
+### Static Table
+
+The **static table** is a built-in, unchangeable lookup table of the 61 most
+commonly-used HTTP header fields (and some common values) as determined during
+the standardization process. Both the client and the server possess an identical
+version of this static table, allowing them to encode and decode headers
+efficiently via compact indices (rather than repeating full header
+names/values).
+
+**Examples of static table entries (abbreviated for illustration):**
+
+| Index | Header Field    | Value         |
+| ----- | --------------- | ------------- |
+| 1     | :authority      |               |
+| 2     | :method         | GET           |
+| 3     | :method         | POST          |
+| ...   | ...             | ...           |
+| 8     | :path           | /index.html   |
+| ...   | ...             | ...           |
+| 33    | accept-encoding | gzip, deflate |
+| ...   | ...             | ...           |
+
+When a header matches a static entry, HPACK can merely transmit its index
+number, often encoded in a single byte, yielding dramatic space
+savings—especially for frequently repeated headers.
+
+### Dynamic Table
+
+The **dynamic table** is a per-connection, mutable cache that stores header
+fields (name/value combinations) seen during the ongoing HTTP/2 session. Both
+sender and receiver maintain synchronized versions of the dynamic table, which
+grows and updates as new headers are transmitted.
+
+**Dynamic Table Management:**
+
+- The table is capped at an agreed-upon size (default: 4096 bytes; can be
+  adjusted via SETTINGS frame).
+- When new headers are indexed, they are appended.
+- If the table exceeds its size, the oldest entries are evicted (FIFO).
+- Both parties rely on updating the table only after the full header block is
+  received (frame boundaries must be respected for table consistency).
+
+**Efficiency:** Rather than transmitting repeated full headers like `cookie:
+sessionid=...`, the sender refers to a table index if the value was recently
+sent, shrinking the header payload size.
+
+**Security:** The dynamic table's per-connection scope avoids cross-user
+leakage—a key improvement over generic compression with shared state which
+previously facilitated attacks like CRIME.
+
+### Huffman Encoding in HPACK
+
+In addition to table indexing, HPACK compresses header names and values using
+**Huffman encoding**. HPACK defines a **static canonical Huffman code table**,
+optimized for typical HTTP header character frequencies. Huffman encoding
+replaces each character with a variable-length code: frequent characters use
+fewer bits, rare characters use more.
+
+**Key features:**
+
+- **Canonical, static tree:** Both endpoints know the exact bit patterns for
+  every byte value—no negotiation needed per connection.
+- **Efficient encoding:** Reduces string literal length for typical header
+  values.
+- **Security:** Since the tree is static, no on-the-fly code negotiation or
+  historical context is needed, minimizing risk.
+
+**When is Huffman used?** HPACK allows either raw (ASCII/UTF-8) or
+Huffman-encoded transmissions for header string literals. The sender chooses
+case-by-case; Huffman encoding is most space-efficient for longer textual
+values, but not always for short or symbol-heavy strings. A flag in the data
+signals which encoding is used for each string.
+
+#### Huffman Code Table (Summary)
+
+HPACK's static Huffman code table maps all 256 possible byte values to bit
+patterns from 5 to 30 bits long, with smaller codes assigned to more frequent
+characters. This table is published in [RFC 7541, Appendix B] and is integrated
+in all compliant HTTP/2 implementations.
+
+#### Huffman Encoding Example
+
+**Encoding the string "!$%&A" with HPACK’s Huffman table:**
+
+Let's break down the process:
+
+| Character | Huffman Code                                  | Bit Length |
+| --------- | --------------------------------------------- | ---------- |
+| `!`       | `1111111000`                                  | 10         |
+| `$`       | `11111110001111111111001`                     | 23         |
+| `%`       | `11111110001111111111001010101`               | 27         |
+| `&`       | `1111111000111111111100101010111111000`       | 34         |
+| `A`       | `1111111000111111111100101010111111000100001` | 41         |
+
+- Each character is replaced by the corresponding bit sequence (from static
+  HPACK table).
+- The sequences are concatenated to form a bitstream.
+- Padding or an end-of-string indicator (EOS) may be added to ensure the bit
+  stream aligns to byte boundaries.
+
+**Example in binary (concatenated):**
+
+```
+1111111000
+11111110001111111111001
+11111110001111111111001010101
+1111111000111111111100101010111111000
+1111111000111111111100101010111111000100001
+[EOS or padding as needed]
+```
+
 ## Interview Questions
 
 ### Explain HTTP/1.1, HTTP/2, HTTP/3, and QUIC in a nutshell
@@ -150,6 +276,36 @@ issues.
 Chunked encoding sends response data in chunks so the client can begin
 processing before the entire payload is generated.
 
+### What is Multiplexing?
+
+**Multiplexing** in HTTP/2 is the ability to send multiple HTTP streams (logical
+request/response pairs) concurrently over a single, persistent TCP connection.
+Streams are split into _frames_, which can be interleaved freely during
+transmission, letting browsers, proxies, and servers exchange multiple requests
+and responses simultaneously without having to wait for any one to finish first.
+
+- **Stream:** A bidirectional exchange of frames (typically for one
+  request/response pair), identified by a unique Stream ID.
+- **Frame:** The basic HTTP/2 protocol unit—a small encapsulated chunk of data,
+  such as HEADERS, DATA, or PUSH_PROMISE.
+- **Multiplexing:** The client/server breaks down each stream into frames, then
+  interleaves these frames over the same TCP connection. Each frame includes its
+  Stream ID, so reassembly is straightforward at the receiving end.
+
+### What is Stream Prioritization?
+
+Clients can assign priority or weight to streams, advising servers of the
+relative importance (e.g., “load CSS before images”). Servers can then schedule
+transmission to favor these preferences, helping to optimize content delivery
+for fast visual paint and interactivity.
+
+### What is Flow Control?
+
+To prevent buffer overruns and resource exhaustion, HTTP/2 implements per-stream
+and per-connection flow control mechanisms. Each endpoint can limit how much
+unacknowledged data it is willing to receive, contributing to fairness and
+stability in high-concurrency scenarios.
+
 ---
 
 ## HTTPS
@@ -195,6 +351,17 @@ HTTPS (HyperText Transfer Protocol Secure) is simply HTTP layered over TLS
   symmetric cipher and session key.
 
 - Connection closes via normal TLS closure or timeout.
+
+### mTLS (mutual TLS)
+
+Extends TLS by requiring both client and server to present and verify
+certificates, enabling bi-directional authentication and significantly raising
+security against impersonators or unauthorized access. mTLS is essential in
+zero-trust architectures, internal microservice communication, and
+high-assurance environments (e.g., banking, IoT). Drawbacks include increased
+device management complexity and certificate lifecycle overhead, but the
+trade-off is much stronger protection, especially against man-in-the-middle
+attacks and credential theft.
 
 ---
 

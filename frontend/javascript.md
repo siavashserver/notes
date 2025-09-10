@@ -311,7 +311,7 @@ The GC automatically frees memory when objects are no longer reachable in the
 program. JavaScript uses **mark-and-sweep**: it marks reachable objects starting
 from roots (`window`, stack variables) and sweeps away the rest.
 
-```js
+```javascript
 let obj = { name: "David" };
 obj = null; // No references, eligible for GC
 ```
@@ -334,7 +334,7 @@ Unused objects kept reachable (e.g., via closures, global vars, DOM references).
 A closure is when a function "remembers" variables from its lexical scope even
 after that scope has exited.
 
-```js
+```javascript
 function makeCounter() {
   let count = 0;
   return function () {
@@ -364,7 +364,7 @@ the global scope.
 ES modules use `import`/`export` for file-based modularity. They are static
 (resolved at compile time), and run in strict mode.
 
-```js
+```javascript
 // math.js
 export function add(a, b) {
   return a + b;
@@ -393,7 +393,7 @@ Yes, using `import()` (dynamic import) which returns a promise.
 JavaScript converts values between types automatically (implicit coercion). `==`
 uses coercion, `===` doesn’t.
 
-```js
+```javascript
 console.log(1 == "1"); // true
 console.log(1 === "1"); // false
 console.log([] == 0); // true ( [] → '' → 0 )
@@ -419,7 +419,7 @@ other references.
 - `WeakMap`: keys must be objects. Values are arbitrary.
 - `WeakSet`: holds objects without duplicates.
 
-```js
+```javascript
 let wm = new WeakMap();
 let obj = {};
 wm.set(obj, "secret");
@@ -444,7 +444,7 @@ No — keys are not enumerable.
 ones that let you customize object behavior (`Symbol.iterator`,
 `Symbol.toStringTag`, etc.).
 
-```js
+```javascript
 const id = Symbol("id");
 let user = { name: "Ali", [id]: 123 };
 
@@ -1409,6 +1409,16 @@ setTimeout(obj.greeting, 0); // `this` lost → undefined or global
 
 Fixes include `.bind(obj)`, arrow function wrappers, or caching the context
 (`const self = this`).
+
+---
+
+## IIFE
+
+An IIFE is a fundamental idiom for avoiding polluting the global namespace,
+enabling local variable scoping and immediate execution of logic, useful in
+module pattern implementation and self-contained initializations. It is widely
+used in pre-ES6 code and remains important for encapsulating logic, particularly
+in frameworks and build scripts.
 
 ---
 

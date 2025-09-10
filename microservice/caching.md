@@ -348,6 +348,44 @@ analysis of the most commonly used cache types, aligned to specific layers.
 
 ---
 
+## Cache Concurrency Strategies
+
+| Strategy             | Consistency            | Use Case                                           | Notes                                            |
+| -------------------- | ---------------------- | -------------------------------------------------- | ------------------------------------------------ |
+| ReadOnly             | Strong (never changes) | Reference data, static lookup tables               | Exception on update; safest and most performant  |
+| NonStrict Read/Write | Eventual               | Data updated infrequently; rare conflicts          | May serve stale data; update on commit only      |
+| Read/Write           | Strong (soft-locks)    | Frequently updated data needing consistency        | Uses soft locks, not SERIALIZABLE; more overhead |
+| Transactional        | XA-transactional       | Data needing distributed transactional consistency | Used with transactional caches and JTA           |
+
+- **ReadOnly**: Cache is immutable after the initial load. Any update attempts
+  throw exceptions. This is optimal for static metadata and achieves the highest
+  performance and safety in both standalone and clustered environments.
+- **Non-Strict Read/Write**: Data may be manually or lazily invalidated after
+  updates, with no guarantee of immediate consistency, tolerating short-lived
+  inconsistencies for infrequently modified data.
+- **Read/Write**: Soft locks manage updates; cache is invalidated or updated
+  after transactions commit, offering strong consistency without full isolation.
+- **Transactional**: Cache updates participate in distributed transactions,
+  offering the strongest consistency guarantees, but with considerable
+  complexity and overhead. This pattern is only viable where durable
+  transactional consistency is paramount, such as financial systems with
+  cluster-aware cache providers.
+
+---
+
+## Distributed Locking
+
+Maintains mutual exclusion in distributed environments. Faulty implementations
+(e.g., Redis Redlock) may fail under network partitions or GC-induced process
+pauses. For correctness, distributed locks should support _fencing tokens_,
+i.e., monotonically increasing numbers that validate the epoch of lock
+acquisition—ensured by consensus protocols like ZooKeeper, Raft, or Paxos.
+Efficiency-driven (rather than correctness-driven) locks may use simple Redis or
+advisory DB locks. The absence of fencing can lead to data corruption or
+split-brain writes.
+
+---
+
 ## Microservices Caching Patterns and Topologies
 
 Microservices introduce unique caching challenges: each service owns its own

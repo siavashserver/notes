@@ -8,6 +8,48 @@ Microservices are a software architectural style where an application is divided
 into small, loosely coupled services that can be developed, deployed, and
 maintained independently.
 
+## Service-Oriented Architecture (SOA) vs. Microservice
+
+**SOA** orchestrates reusable, network-accessible components (services) into
+business processes, promoting interoperability, standardized contracts, loose
+coupling, functional autonomy, and ease of maintenance and composition.
+
+| Aspect            | SOA (Service-Oriented Architecture)                                          | Microservices                                                                         |
+| ----------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **Philosophy**    | Integrates enterprise-wide services for reuse across multiple applications   | Builds small, independently deployable services around specific business capabilities |
+| **Communication** | Often uses an **Enterprise Service Bus (ESB)** with protocols like SOAP, XML | Prefers lightweight protocols like REST/HTTP, gRPC, JSON                              |
+| **Governance**    | Centralized governance, shared standards                                     | Decentralized governance, each service can choose its own stack                       |
+| **Deployment**    | Services may be large and interdependent                                     | Services are small, autonomous, and independently deployable                          |
+| **Scalability**   | Scales at the service level, but often tied to ESB constraints               | Scales at the microservice level, enabling fine-grained scaling                       |
+| **Use Case**      | Large enterprises integrating legacy systems                                 | Agile, cloud-native, CI/CD-driven environments                                        |
+
+### Key Differences
+
+1. **Granularity**
+
+   - SOA services are **coarse-grained** (cover broad business functions).
+   - Microservices are **fine-grained** (focus on a single capability).
+
+2. **Coupling & Independence**
+
+   - SOA services can still have hidden dependencies via the ESB.
+   - Microservices aim for **true loose coupling** — each has its own database
+     and lifecycle.
+
+3. **Technology Stack**
+
+   - SOA is tech-agnostic but often tied to enterprise middleware.
+   - Microservices embrace polyglot persistence and lightweight frameworks.
+
+4. **Data Management**
+
+   - SOA often uses a **shared data model**.
+   - Microservices use **database-per-service** to avoid coupling.
+
+5. **Failure Isolation**
+   - SOA failures can cascade through the ESB.
+   - Microservices isolate failures better with patterns like circuit breakers.
+
 ## What is Cohesion?
 
 The code that changes together, stays together. Cohesion applies to the
@@ -72,6 +114,92 @@ Types of Coupling:
 A service mesh, deals very narrowly with communication between microservices
 inside your perimeter, the _East-West_ traffic.
 
+A **service mesh** is an infrastructure layer that manages, secures, and
+observes communication between microservices within a distributed system. It
+achieves this by offloading common concerns—such as service discovery, traffic
+management, encryption, and observability—from application code to the
+infrastructure itself. The heart of most service meshes is a **sidecar proxy**
+deployment, often using high-performance proxies like Envoy, which intercepts
+and manages inbound and outbound service traffic.
+
+### Service mesh key concepts
+
+- **Sidecar Proxy Pattern:** Deploying a proxy alongside each microservice
+  instance to transparently intercept all service-to-service network traffic.
+- **Control Plane:** Centralized components that configure the proxies,
+  distributing policies, certificates, and routing instructions.
+- **Data Plane:** The collection of sidecar proxies responsible for the actual
+  traffic management, security enforcement, and data collection.
+- **Service Discovery:** Dynamic discovery and tracking of services and
+  endpoints within the mesh.
+- **Traffic Management:** Advanced routing, load balancing, traffic shifting,
+  and chaos injection features.
+- **Security:** mTLS encryption, certificate management, authentication, and
+  authorization policy enforcement.
+- **Observability:** Collection of fine-grained metrics, distributed traces, and
+  detailed logs for effective monitoring and troubleshooting.
+
+### Service Mesh Benefits in Distributed Systems
+
+- **Consistent Security:** Mutual TLS (mTLS) is enforced transparently for all
+  service interactions, ensuring data-in-transit encryption and strong workload
+  identity verification across the mesh without requiring code changes.
+- **Resilience and Fault Tolerance:** Features like circuit breaking, retries,
+  and timeouts improve the stability of applications under stress or during
+  partial failures.
+- **Observability:** Standardized collection of service-level, proxy-level, and
+  control plane metrics, as well as distributed tracing and access logs, enables
+  robust monitoring and troubleshooting across all services.
+- **Traffic Management:** Fine-grained policies for traffic splitting,
+  mirroring, and manipulation—essential for canary deployments, blue/green
+  releases, and A/B testing—are enforceable declaratively.
+- **Operational Efficiency:** Centralized configuration allows operations teams
+  to implement policies and update routing or security rules mesh-wide, rapidly
+  and consistently, reducing human error and silos.
+- **Governance:** Fine-grained access controls, auditability, and compliance
+  features become more achievable across the entire microservice landscape.
+
+### How Service Mesh Standardizes and Secures Inter-Service Traffic
+
+- **Zero-trust Network Security:** mTLS encrypts all mesh traffic, authenticates
+  endpoints, and enables workload identity-based access control.
+- **Resilient Communication:** Automated retries and failovers, circuit
+  breaking, and fine-grained timeouts reduce the blast radius of network or
+  service failures.
+- **Dynamic Routing and Policy Enforcement:** Application traffic can be shaped
+  in real time, supporting advanced deployment patterns such as staged rollouts
+  or emergency hotpatches without redeployment.
+- **Transparent Layer:** The mesh works without requiring application logic
+  changes—the proxies handle networking, security, and observability as a
+  platform service.
+
+> This architecture empowers platform engineers to enforce system-wide
+> invariants (like "encrypt all traffic" or "never expose internal services
+> externally") with minimal risk of developer omission.
+
+### Why Kubernetes is a Natural Fit for Service Mesh
+
+**Kubernetes** is the de facto standard for container orchestration, providing
+automated resource allocation, scaling, and lifecycle management across
+distributed applications. Its **declarative approach** to service discovery,
+dynamic scaling, and networking creates fertile ground for service mesh
+integration.
+
+A service mesh complements Kubernetes by adding:
+
+- Detecting and dynamically managing mesh membership with the help of Kubernetes
+  native service discovery
+- Injecting sidecar proxies automatically using Kubernetes admission controllers
+  or webhook integrations
+- Leveraging Kubernetes APIs for configuration, secret distribution, and
+  lifecycle management
+- Coordinating updates, rollbacks, or traffic shifts in synergy with Kubernetes
+  deployments, replicasets, and network policies
+
+**The result:** Organizations can introduce advanced communication, security,
+and observability features to Kubernetes workloads without modifying service
+deployments or application code.
+
 ## What is an API Gateway?
 
 API gateway sits on the perimeter of your system and deals with _North-South_
@@ -84,6 +212,20 @@ internal microservices. Here is how it works:
 - Load Balancing
 - Logging and Monitoring
 - Request/Response Transformations
+
+## What is API Composer pattern?
+
+The **API Composer** pattern (or API composition) enables the gateway to invoke
+multiple microservices and assemble their results, returning a unified response
+to the client. This is critical where data is distributed across specialized
+services—offering a single, cohesive API endpoint to clients. The API composer
+often performs in-memory data joins or aggregation calls via serverless handlers
+(like AWS Lambda), orchestrating distributed queries in a manner transparent to
+clients. Drawbacks include increased coupling (gateway outage impacts all client
+calls), potential bottlenecks, and complexity with many microservices and large
+datasets. As microservices increase, API composition can suffer from degraded
+system availability and higher operational costs due to increased backend
+traffic.
 
 ## What is a load balancer?
 
@@ -108,10 +250,43 @@ Load balancing methods:
 Service discovery is the process of automatically detecting devices and services
 on a computer network.
 
-Service discovery methods:
+### Service discovery methods
 
-- DNS (Domain Name System)
-- Dynamic Service Registries: Kubernetes etcd, Consul
+**Client-Side Discovery** assigns clients the responsibility to query a
+centralized registry (like Consul, Eureka, or Zookeeper) to locate target
+service instances. The client itself often must implement load balancing logic,
+potentially increasing its complexity but removing a dedicated network hop for
+load balancing.
+
+**Server-Side Discovery** employs a proxy or load balancer (e.g., AWS ELB,
+NGINX) as an intermediary. Clients communicate with this proxy, which queries
+the registry and forwards the request to a healthy instance. This abstracts away
+service location details from the client and centralizes load balancing, but can
+introduce a new bottleneck and requires robust proxy resilience.
+
+**Self-Registration** has each service register itself with the discovery
+registry (such as Eureka or Consul) upon startup and deregister upon shutdown.
+This model enables dynamic scaling and high availability, but it is essential
+that the registry itself is highly available to prevent a single point of
+failure.
+
+**Third-Party Registration** utilizes a dedicated sidecar or process to register
+and deregister services independently. This is common where main services cannot
+directly interact with the registry, such as legacy systems, and leverages
+orchestrators or service mesh proxies for registration duties.
+
+**Kubernetes** offers a network-side hybrid service discovery, employing cluster
+DNS and distributed proxying (via `kube-proxy` or eBPF alternatives). It blends
+the benefits of client and server-side models, maintaining a logical Kubernetes
+"Service" with a stable entry point for ephemeral Pods. DNS-based discovery is
+used for clients, while endpoints are efficiently load-balanced across cluster
+nodes, decoupling clients from Pod lifecycle complexity.
+
+### Leading Tools
+
+- **Consul**, **etcd**, **Zookeeper**, **Eureka** provide robust distributed,
+  highly available registries with features like health checking, key-value
+  storage, and platform integrations.
 
 ## What is a service registry?
 
@@ -137,6 +312,16 @@ the system, promoting loose coupling and scalability.
 
 Command Query Responsibility Segregation (CQRS) separates read and write
 operations for better performance and scalability.
+
+## What are System Robustness Attributes?
+
+Robustness—as a component of resilience—is defined by a system’s ability to
+**resist**, **detect**, **react to**, and **recover from** adverse conditions.
+This includes mechanisms for fault tolerance (hardware, software errors),
+environmental (power loss, disasters), security (attacks, tampering), and
+capacity (overload, resource exhaustion) resilience. A robust system rapidly
+protects and restores critical capabilities under duress, ensuring business
+continuity and regulatory compliance.
 
 ---
 
@@ -227,6 +412,15 @@ allowing faster access and reducing load on underlying services. Caching can
 improve performance and prevent failures by reducing the number of calls to
 slower, external services.
 
+### Back Pressure
+
+Essential in reacting to production speed mismatches in streaming or
+message-driven systems. When producers emit events faster than consumers can
+process (as seen in web, event, or messaging systems), a lack of back pressure
+may cause memory overflow, unhandled exceptions, or total system collapse.
+Common strategies are pull-based control, explicit rate limiting, and stream
+cancellation.
+
 ---
 
 ## Distributed transactions
@@ -255,42 +449,213 @@ especially if the scope of locking is large, or if the duration of the
 transaction is large. It's for this reason two-phase commits are typically used
 only for very short-lived operations.
 
+### Three-Phase Commits (3PC)
+
+3PC extends the traditional two-phase commit by introducing a pre-commit
+"prepared" state, mitigating the so-called "blocking" problem where commit
+coordination failures could indefinitely block participants in two-phase commit.
+However, 3PC is seldom used in practice due to its complexity, assumptions about
+bounded network delays, and its increased round-trip requirements, which can
+increase latency considerably. It is valuable for understanding distributed
+transaction protocols and is academically foundational.
+
 ### Saga
 
-Saga is by design an algorithm that can coordinate multiple changes in state,
-but avoids the need for locking resources for long periods of time. A saga does
-this by modeling the steps involved as discrete activities that can be executed
-independently. We can break a single business process into a set of calls that
-will be made to collaborating services, this is what constitutes a saga.
+A **Saga** is a **sequence of local transactions**, each executed by a single
+service. Rather than synchronizing distributed state via locks or centralized
+commits, a Saga coordinates the **eventual completion** of all local steps, and,
+if any step fails, invokes **compensating transactions** to undo previously
+completed work, thereby restoring system consistency.
 
-A _compensating transaction_ is an operation that undoes a previously committed
-transaction. To roll back, we would trigger the compensating transaction for
-each step in our saga that has already been committed.
+#### Key Concepts
 
-There are two types of recovery in sagas:
+- **Local Transactions:** Each service fulfills only its discrete, local portion
+  of the overall business process.
+- **Compensating Transactions:** Rollback operations are explicitly designed for
+  each step to reverse changes in case of failure.
+- **Eventual Consistency:** Rather than strong, immediate consistency, the
+  system converges to a correct state over time.
+- **Decentralization vs Centralization:** Depending on the coordination
+  strategy, Sagas can be managed either by a central orchestrator or by
+  peer-to-peer event-driven logic.
 
-- _Backward recovery_ involves reverting the failure and cleaning up afterwards.
-  We need to define compensating actions that reverts previously committed
-  transactions.
+#### Designing Compensation Logic
 
-- _Forward recovery_ allows us to pick up from the point where the failure
+For every local transaction in the workflow, an explicit, idempotent
+compensation operation must be defined. The compensation function must succeed
+even if invoked multiple times and should leave the system in a consistent
+state. For example:
+
+- If payment is charged but inventory reservation fails, a **refund payment**
+  compensation is required.
+- If an order is canceled after shipping failed, a **cancel shipment** and
+  **restock inventory** operation is needed.
+- The design must ensure that compensation will not break business invariants or
+  introduce data inconsistencies even with intermittent failures or retries.
+
+#### Failure Recovery Types
+
+- **Backward recovery** involves reverting the failure and cleaning up
+  afterwards. We need to define compensating actions that reverts previously
+  committed transactions.
+
+- **Forward recovery** allows us to pick up from the point where the failure
   occurred and keep processing. For that to work, we need to be able to retry
   transactions, which in turn implies that our system is persisting enough
   information to allow this retry to take place.
 
-There is two types of saga implementations:
+#### Centralized Control with a Saga Orchestrator
 
-- Orchestrated sagas: They use a central coordinator (orchestrator) to define
-  the order of execution and to trigger any required compensating action. By its
-  nature, this is a somewhat coupled approach. The other issue, which is more
-  subtle, is that logic that should otherwise be pushed into the services can
-  start to become absorbed in the orchestrator instead.
+**Orchestration-based Sagas** employ a **central orchestrator
+service**—sometimes called a process manager or coordinator—that dictates the
+flow of the entire transaction. This orchestrator issues explicit commands to
+participant services and handles the order of operation, status tracking, and
+all compensation logic if failures occur.
 
-- Choreographed sagas: It aims to distribute responsibility for the operation of
-  the saga among multiple collaborating services. If orchestration is a
-  command-and-control approach, choreographed sagas represent a trust-but-verify
-  architecture. Choreographed sagas will often make heavy use of events for
-  collaboration between services.
+- **Central Workflow Definition:** All saga logic (steps, transitions, error
+  handling) reside in the orchestrator.
+- **Command-Response Communication:** The orchestrator controls execution by
+  sending requests and awaiting results.
+- **Centralized Error Management:** Compensation and retries are handled by the
+  orchestrator.
+- **Visibility and Observability:** The orchestrator maintains an auditable,
+  stepwise record of saga progress.
+
+Consider the onboarding of a new employee:
+
+1. The orchestrator invokes the **User Service** to create an account.
+2. Upon success, it triggers the **Payroll Service**.
+3. On successful payroll setup, it proceeds to the **Benefits Service**.
+4. If any step fails, the orchestrator explicitly calls the compensating
+   operations of previous services to reverse changes.
+
+#### Decentralized Event-Driven Control with a Choreography-based Saga
+
+In a **choreography-based Saga**, there is **no central coordinator**. Instead,
+each participant service knows when to act by **listening for domain events**
+published by other services. When a service completes its task, it emits an
+event that the next service (or several services) can interpret as a trigger for
+the next step in the transaction.
+
+- **Decentralized Control:** Each service contains its portion of workflow
+  logic, subscribing to relevant events.
+- **Event-Driven Communication:** Services explicitly emit and consume domain
+  events.
+- **Autonomous Error Handling:** Services handle their own compensation and
+  retry logic.
+- **Loose Coupling:** Greater scalability and flexibility, as services have
+  minimal dependencies on each other.
+
+Following the same e-commerce order scenario:
+
+1. **Order Service** creates an order and emits an `OrderCreated` event.
+2. **Payment Service** listens for `OrderCreated`, processes payment, and emits
+   `PaymentCompleted` or `PaymentFailed`.
+3. **Inventory Service** listens for `PaymentCompleted`. On failure, it emits
+   `InventoryReservationFailed`, which triggers compensation in the previous
+   service.
+4. **Shipping Service** listens for reservation events and handles shipment
+   accordingly.
+
+#### Orchestration vs Choreography Saga
+
+| Aspect                  | Orchestration                                    | Choreography                                       |
+| ----------------------- | ------------------------------------------------ | -------------------------------------------------- |
+| **Control Flow**        | Centralized (single orchestrator)                | Decentralized (event-driven by each service)       |
+| **Workflow Definition** | Explicit and managed in orchestrator             | Implicit, spread across services                   |
+| **Error Handling**      | Central, via orchestrator                        | Distributed, each service handles compensation     |
+| **Complexity**          | Complexity centralizes in orchestrator           | Complexity is distributed, can grow with scale     |
+| **Observability**       | High; state and logs are tracked in orchestrator | Harder; must aggregate events across services      |
+| **Coupling**            | Moderately coupled to orchestrator               | Loosely coupled, services are more independent     |
+| **Scalability**         | Orchestrator could be a bottleneck               | Scales with services; no single point of failure   |
+| **Suitability**         | Best for ordered/complex workflows, audit needs  | Best for simple, linear, or highly decoupled flows |
+| **Failure Recovery**    | Orchestrator coordinates retry/compensation      | Each service must listen and compensate as needed  |
+
+**In summary**, orchestration is ideal where process visibility, order
+enforcement, and centralized error handling are vital. Choreography excels where
+flexibility, scalability, and independence are paramount, but adds challenges in
+flow tracking and distributed compensation logic.
+
+---
+
+## Distributed Locking in Microservices
+
+Distributed locking is a foundational concept in the synchronization of
+operations across multiple processes in large-scale, distributed environments
+such as microservices architectures. Unlike traditional, in-memory locks which
+restrict access within a single application instance or server, **distributed
+locks** must coordinate access to shared resources across many independent nodes
+which may reside on different machines, data centers, or even clouds. This
+extension in scope introduces a set of complicated challenges including network
+latency, node failures, partial system outages, and the risk of deadlocks or
+stale locks due to unforeseen process crashes.
+
+At its core, a distributed lock acts as a mutually exclusive access control
+primitive. Only one process (among potentially many) may hold the lock at any
+given time, thereby providing the critical safety guarantee for concurrent
+operations that manipulate shared data, configuration, or hardware. This mutual
+exclusion property is essential for consistency and correctness, preventing
+issues such as lost updates, race conditions, or the dreaded **double order
+processing** bug in e-commerce systems.
+
+In the context of modern **microservices**, the requirement for distributed
+locks is acutely felt whenever different service instances or separate
+microservices must modify shared state, perform singleton tasks (like leader
+election), or coordinate inter-service workflows. For example, suppose a system
+scales a background job processor horizontally by deploying replicas; only one
+replica should process a specific job at any moment, and a distributed lock
+ensures exclusivity. Or, consider a financial system that permits only one
+service instance to reconcile accounts—the absence of proper locking could
+trigger inconsistencies, duplicated work, or even financial losses.
+
+> It’s important to note that, as per the **CAP theorem**, distributed locking
+> generally trades off availability for consistency: if a lock cannot be
+> reliably acquired, the system chooses safety over processing requests that
+> might violate invariants.
+
+### Why Distributed Locks Are Needed in Microservices
+
+The shift from monolithic architectures to microservices, which is motivated by
+scalability, resilience, and ease of deployment benefits, amplifies certain
+operational complexities. Microservices commonly share resources such as:
+
+- Databases and transactional stores
+- Caches or message queues
+- External APIs that are rate-limited
+- Hardware resources (e.g., connected devices)
+- Stateful configuration repositories
+
+In a horizontally scaled deployment, these resources can quickly become points
+of contention. **Race conditions**, for instance, occur when multiple
+microservice instances read, update, and write a shared resource nearly
+simultaneously, resulting in data corruption or inconsistent state.
+Additionally, workflows may require **singleton behavior** (e.g., one-off
+scheduled tasks, leadership responsibilities in cluster orchestration, or state
+migration processes), which must be carefully coordinated to avoid redundant or
+conflicting actions.
+
+Without the discipline imposed by distributed locks, the following risks emerge:
+
+- **Lost updates**: Two processes read the same value, increment independently,
+  and both write back, losing one update.
+- **Resource overuse**: Two instances might both trigger an external API call
+  that must only occur once, potentially breaching SLAs or quotas.
+- **Sequencing errors**: Services might perform a sequence-sensitive update
+  (like batch processing) in the wrong order, causing inconsistent downstream
+  data.
+- **Duplicated or missed work**: In leader election or background scheduling
+  roles, the absence of a distributed lock may result in either all nodes acting
+  (duplication) or none acting (starvation).
+
+### Compliance and Security Drivers
+
+Adoption of distributed locking can also be motivated by compliance and audit
+requirements. For instance, security standards such as **ISO 27001** or **SOC
+2** emphasize the controlled and auditable handling of sensitive state changes,
+which is only possible through reliable coordination provided by distributed
+locks. DevSecOps teams in regulated industries frequently depend on distributed
+locking to enforce data integrity and workflow guarantees critical to
+compliance.
 
 ---
 

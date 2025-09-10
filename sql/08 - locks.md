@@ -24,6 +24,14 @@ Acquired during search for applicable rows (*WHERE*, etc), and turned into *Excl
 
 Acquired on all possible rows satisfying the given predicate, during *Serializable Transaction Isolation Level*.
 
+## Deadlock
+
+Occurs when two or more transactions block each other's needed resources,
+resulting in perpetual waits. Databases detect deadlocks via wait-for graphs and
+cycles, terminating one transaction to break the impasse. Minimizing deadlocks
+demands consistent locking order, short transactions, and in some cases, using
+row versioning or snapshot isolation (with its own trade-offs).
+
 ## Locking Methods
 
 ### Pessimistic Locking

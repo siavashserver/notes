@@ -282,7 +282,7 @@ server in the runtime environment.
 
 **Example (Node.js/Express):**
 
-```js
+```javascript
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log(`App listening on port ${port}`));
 ```

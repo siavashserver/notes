@@ -31,6 +31,94 @@ Each team:
 | Shared Dependencies     | Duplicate libraries can bloat the app (fixable via Module Federation)  |
 | Cross-Team Coordination | Teams must agree on contracts/interfaces                               |
 
+## Benefits of Adopting Microfrontends
+
+**Microfrontends** address many critical challenges of modern web development.
+The most tangible benefits, consistently documented in both industry and
+academic literature, are:
+
+- **Scalability:** Teams and features grow independently without increasing
+  overall system complexity.
+- **Team Autonomy:** Developers take full ownership of features, fostering
+  accountability and enabling parallel workstreams.
+- **Continuous and Independent Deployment:** Modules can be released, upgraded,
+  or rolled back without impacting the broader system—enabling rapid innovation
+  cycles.
+- **Technology Diversity:** Freedom to choose the most appropriate tool or
+  framework per module; experimentation without risking the stability of the
+  integrated experience.
+- **Incremental Upgrades and Migration:** Legacy applications can be modernized
+  feature by feature, minimizing risk and “big-bang” rewrites.
+- **Fault Isolation:** Issues or failures in one module rarely impact the entire
+  application, increasing system resilience and reliability.
+- **Faster Time-to-Market:** Modular development and testing pipelines reduce
+  bottlenecks common in monolithic codebases, allowing new features and bug
+  fixes to be delivered more quickly.
+
+## Monolithic Frontend vs Microfrontend Architectures
+
+### Monolithic Frontend Architecture
+
+Traditional **monolithic frontends** are developed, tested, and deployed as a
+single, unified codebase. All features, dependencies, and UI components reside
+in one project or repository, managed by a centralized team or set of teams.
+
+**Key characteristics of monoliths:**
+
+- All UI logic, state, and styling are tightly coupled.
+- Technology stack remains uniform across the application.
+- Scaling requires scaling the entire app, regardless of which parts experience
+  increased demand.
+- Introduction of new features, upgrades, or bug fixes often risks affecting
+  unrelated parts of the application.
+- Coordination overhead increases as more developers and teams are added.
+
+**Advantages:**
+
+- Simple to develop and manage for small projects.
+- Lower upfront complexity.
+
+**Disadvantages:**
+
+- Difficult to scale development when multiple teams are involved.
+- Risk of bottlenecks and merge conflicts.
+- Slower innovation cycles and deployment times when updates are queued behind
+  unrelated changes.
+- Harder to incrementally modernize; upgrades often require large rewrites.
+
+### Microfrontend Architecture
+
+Conversely, **microfrontend architectures** divide the UI into independently
+deployable modules, each responsible for one feature or business domain. Each
+module is owned end-to-end—code, infrastructure, deployment—by a single team.
+
+**Key characteristics:**
+
+- Modules are developed, deployed, and tested independently.
+- Teams choose their tech stacks, tooling, and processes.
+- Applications grow organically; legacy monoliths can be “strangled” piece by
+  piece into microfrontends.
+- Clear ownership reduces cross-team conflicts.
+- Teams and features can scale horizontally, in parallel architectures.
+
+**Advantages:**
+
+- Rapid iteration and experimentation by small, focused teams.
+- Technology flexibility—the application can evolve technology stacks
+  incrementally.
+- Incremental upgrades and modernization.
+- Failure isolation; issues in one module are less likely to bring down the
+  whole UI.
+- Easier legacy migration; new features or pages are delivered as new
+  microfrontends without touching existing monolithic parts.
+
+**Disadvantages:**
+
+- Higher operational and governance overhead.
+- Potential for inconsistent user experience without strong central design
+  systems.
+- More complex inter-module communication requirements.
+
 ## Core Ideas
 
 ### Be Technology Agnostic
@@ -48,6 +136,87 @@ Each team:
 - Microfrontends should **not leak CSS**, JS, or global variables.
 - Use **Shadow DOM**, **CSS modules**, or **style prefixes**.
 - JS should be **scoped** using module systems or `customElements`.
+
+#### HTML Templates
+
+The `<template>` element allows hidden, inert chunks of HTML markup to be
+defined and instantiated by JavaScript at runtime. This defers rendering and
+enables dynamic, repetitive UI creation. Templates are pivotal for defining
+reusable content skeletons in custom element development.
+
+```html
+<template id="card-template">
+  <div class="card">
+    <h2 class="title"></h2>
+    <p class="content"></p>
+  </div>
+</template>
+
+<script>
+  const template = document.getElementById("card-template");
+  const clone = template.content.cloneNode(true);
+  clone.querySelector(".title").textContent = "Hello, Template!";
+  clone.querySelector(".content").textContent =
+    "This content was cloned from a template.";
+  document.body.appendChild(clone);
+</script>
+```
+
+#### Custom Elements API
+
+Developers can define new HTML element types (autonomous or as extensions of
+built-ins), encapsulating logic, state, and style. Elements include lifecycle
+callbacks for attachment, removal, and attribute mutation, supporting
+sophisticated UI patterns with native support in modern browsers.
+
+```html
+<script>
+  class MyGreeting extends HTMLElement {
+    connectedCallback() {
+      this.textContent = `Hello, ${this.getAttribute("name") || "World"}!`;
+    }
+  }
+
+  customElements.define("my-greeting", MyGreeting);
+</script>
+
+<my-greeting name="David"></my-greeting>
+```
+
+#### Shadow DOM
+
+Enables encapsulation of a subtree and styles within a host element,
+guaranteeing that styles and structure are isolated from the rest of the page
+and preventing global CSS/JS conflicts. Shadow roots can be open (accessible
+from the host) or closed (hidden), facilitating robust composability and
+abstraction for design systems and micro-frontends.
+
+```html
+<script>
+  class FancyButton extends HTMLElement {
+    constructor() {
+      super();
+      const shadow = this.attachShadow({ mode: "open" });
+      shadow.innerHTML = `
+        <style>
+          button {
+            background: royalblue;
+            color: white;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+          }
+        </style>
+        <button>Click Me</button>
+      `;
+    }
+  }
+
+  customElements.define("fancy-button", FancyButton);
+</script>
+
+<fancy-button></fancy-button>
+```
 
 ### Establish Clear Contracts
 
@@ -150,6 +319,72 @@ To ensure consistency:
 
 - Use a shared **UI library** (e.g., design tokens, buttons, theming)
 - But **don't force full reusability** — allow freedom
+
+Design systems encapsulate reusable UI patterns, component libraries, and
+standardized style guides, enforcing consistency and scalability in multi-team,
+component-driven development. Advantages include:
+
+- Centralized decision-making (styles, tokens)
+- Framework-agnostic adoption (web components)
+- Improved designer–developer collaboration and handoff
+- Automatic enforcement of corporate branding and accessibility
+
+## Routing and State Management Design Patterns
+
+**Best Practice:** Prefer state and routing isolation, only exposing
+well-defined interfaces for cross-module communication. Use design systems and
+shared libraries only when necessary, and version shared dependencies to limit
+upgrade risk.
+
+### Routing
+
+- Typically orchestrated at the container level, with child microfrontends
+  controlling routing within their scope.
+- Strategies include passing the navigation object (e.g., React Router's
+  history), using location-based parameters, or event buses to notify modules to
+  render based on URL changes.
+- Technologies like single-spa or Luigi provide advanced, configuration-driven
+  routing for multi-module apps.
+
+### State Management
+
+- Each microfrontend maintains its own state (e.g., Redux store).
+- Shared state is generally avoided; when necessary, state is passed via global
+  events, shared services, localStorage, or APIs.
+- Event-based communication (pub-sub, browser events) helps reduce tight
+  coupling.
+- Common interface patterns include custom DOM events, message-passing
+  (especially for iframes), or integrations via backend APIs.
+
+## Best Practices for Implementing Microfrontends
+
+- **Define Clear Boundaries:** Each microfrontend should have a well-defined,
+  functionally cohesive domain to minimize integration complexity and maximize
+  maintainability.
+- **Consistent Design Systems:** Establish a shared design system (e.g., with
+  Storybook, Design Tokens) and style guide to ensure visual and UX consistency
+  across microfrontends, despite the potential use of multiple frameworks.
+- **API-First Contracts:** Standardize communication and data exchange through
+  explicit, versioned API contracts.
+- **Version Control and Dependency Management:** Use tools like import maps or
+  semantic versioning; maintain backward compatibility across shared modules and
+  expose APIs for communication.
+- **Automated Testing & CI/CD:** Each microfrontend requires its own automated
+  tests (unit, integration, e2e) and independent CI/CD pipelines. This supports
+  fast, autonomous releases and minimizes risk.
+- **Lazy Loading:** Load microfrontends only when required (on navigation,
+  feature requirement), reducing initial bundle sizes and improving performance.
+- **Minimize Shared State:** Avoiding global state across microfrontends reduces
+  coupling; state is either isolated or shared through backend APIs or
+  well-documented event systems.
+- **Performance Optimization:** Deduplicate dependencies, use caching, and
+  monitor overall payload size.
+- **Governance:** Guard against architectural and UX anarchy by codifying
+  contribution and design standards, and appoint platform or design system
+  maintainers.
+- **Security:** Isolate microfrontends via sandboxing or strict CSP, manage
+  cross-origin asset loading, audit dependencies, and enforce secure coding
+  guidelines.
 
 ## Core Concepts
 
@@ -304,7 +539,8 @@ remotes: {
 
 ### Runtime Composition (Server-Side)
 
-> The server assembles microfrontend fragments into a full HTML response.
+> The server assembles microfrontend fragments into a full HTML response. A
+> fragment is an isolated embeddable mini-app in page.
 
 #### Techniques
 
@@ -358,6 +594,53 @@ Each microfrontend runs in an `iframe`.
 #### Use When
 
 - Strict isolation is required (e.g., plugins, admin panels)
+
+### Web Components and Custom Elements
+
+These are natively supported HTML elements, leveraging the Shadow DOM for style
+and DOM isolation. Teams wrap their feature modules as custom elements
+(`<my-checkout-widget>`) which the container injects into the DOM.
+
+### Single SPA (single-spa)
+
+This meta-framework lets each microfrontend be built with a different stack.
+Single-spa provides orchestration by registering and dynamically mounting the
+microfrontends against routes or other activation events.
+
+### Module Federation (Webpack 5)
+
+Webpack's Module Federation feature allows multiple projects to share code and
+dynamically import modules from one another at runtime, facilitating independent
+deployment with shared dependencies.
+
+## Build-Time vs. Runtime Integration Strategies
+
+### Build-Time Integration
+
+- Microfrontend modules are aggregated at build time, resulting in a single,
+  optimized bundle.
+- Ensures consistent dependencies and styling.
+- However, any update requires the whole app to be rebuilt and redeployed;
+  reduced autonomy and flexibility.
+
+### Runtime Integration
+
+- Microfrontends are loaded on-demand by the container from independently
+  deployed sources.
+- Supports independent deployment, flexible technology choices, and incremental
+  rollout.
+- Common methods: Module Federation, Single-SPA, Web Components, SystemJS,
+  dynamic script tags, or import maps.
+- Requires careful management of runtime dependencies (e.g., avoiding duplicate
+  React bundles) and consistent inter-module communication contracts.
+
+| Factor                   | Build-Time Integration       | Runtime Integration            |
+| ------------------------ | ---------------------------- | ------------------------------ |
+| Deployment flexibility   | Lower                        | Higher                         |
+| Performance              | Higher (single bundle)       | Potentially lower (many files) |
+| Independent updates      | Poor                         | Excellent                      |
+| Risk of version conflict | Low                          | Medium-High                    |
+| Use case                 | Small projects, stable teams | Large, dynamic applications    |
 
 ## Interview Questions
 
@@ -424,6 +707,16 @@ exposes: {
   './Header': './src/Header',
 }
 ```
+
+### What is Shared Library Optimization in microfrontends?
+
+Module Federation (Webpack 5+) solves the duplication of shared dependencies in
+microfrontend (MFE) architectures. Only one copy of a singleton dependency (such
+as React or Redux) is loaded, managed via federation-specific shared API
+registries and workspace-level policies (e.g., Nx SVP recommends enforcing a
+single version for team consistency and API compatibility). This eliminates
+runtime conflicts, reduces bundle size, and maintains shared library integrity
+despite decentralized feature team deployments.
 
 ### How would you implement microfrontends using Web Components?
 
@@ -738,3 +1031,389 @@ ng serve shell --port 4200
 
 You’ll see the remote Angular module/component from `mfe1` loaded **lazily at
 runtime** via Webpack Module Federation.
+
+---
+
+## Custom Elements API
+
+The **CustomElements API** lets developers:
+
+- Define entirely new HTML tags (autonomous custom elements)
+- Extend existing elements (customized built-in elements, with browser
+  limitations)
+- Associate ES6 classes with HTML tags, giving each DOM instance powerful,
+  class-based logic, state, and reactivity
+- Utilize lifecycle hooks for reacting to changes in the element's connection,
+  attributes, or parent document
+- Integrate with other DOM APIs, events, and even frameworks thanks to the
+  standards-based approach
+
+### Types of Custom Elements
+
+| Type                        | Base Class              | Example Tag Syntax        | Extends Native? | Browser Support\*   |
+| --------------------------- | ----------------------- | ------------------------- | --------------- | ------------------- |
+| Autonomous Custom Element   | HTMLElement             | `<my-card></my-card>`     | No              | Universal (modern)  |
+| Customized Built-in Element | HTMLButtonElement, etc. | `<button is="fancy-btn">` | Yes             | Limited (see below) |
+
+> \*Browser support: Custom built-in elements are not supported in Safari, and
+> their practical use is niche. The mainstream practice is to use **autonomous
+> custom elements** wherever possible for maximum compatibility and flexibility.
+
+#### Autonomous Custom Elements
+
+- **Definition**: Inherit directly from `HTMLElement`, introducing entirely new
+  tags and syntax.
+- **Usage**: `<my-dialog>`, `<todo-list>`, or any unique tag containing a
+  hyphen.
+- **Full power of the API**: All lifecycle hooks and encapsulation strategies
+  are available.
+
+```javascript
+// Autonomous Custom Element
+class MyCard extends HTMLElement {
+  // ...custom logic...
+}
+customElements.define("my-card", MyCard);
+```
+
+#### Customized Built-in Elements
+
+- **Definition**: Extend from an existing native element interface (e.g.,
+  `HTMLButtonElement`) to specialize its behavior.
+- **Usage**: `<button is="rounded-button">`
+- **Syntax**: Custom element name via the `is` attribute, not the tag name.
+- **Browser Limitation**: Not supported in Safari and largely discouraged except
+  for specialist legacy cases.
+
+```javascript
+// Customized Built-in Element (limited support)
+class FancyButton extends HTMLButtonElement {
+  // ...custom logic...
+}
+customElements.define("fancy-btn", FancyButton, { extends: "button" });
+// Usage: <button is="fancy-btn"></button>
+```
+
+### Defining and Registering Custom Elements
+
+#### Defining a Custom Element
+
+```javascript
+class MyGreeting extends HTMLElement {
+  constructor() {
+    super();
+    // Initial state setup, event binding, etc.
+  }
+  connectedCallback() {
+    this.innerHTML = "<p>Hello, Custom Elements!</p>";
+  }
+}
+
+customElements.define("my-greeting", MyGreeting); // Registration
+```
+
+```html
+<my-greeting></my-greeting>
+```
+
+#### The Registration Process: customElements.define
+
+```javascript
+customElements.define(name, constructor, options);
+```
+
+- **name (string):** Must include a hyphen (e.g., `my-element`).
+- **constructor (class):** The JavaScript class implementing the element
+- **options (object, optional):** Used for customized built-in elements only;
+  e.g., `{ extends: 'button' }`.
+
+##### Registration Rules and Errors
+
+1. **The name must include a hyphen.** This avoids future conflicts with native
+   tags.
+2. **Multiple registrations with the same name are not allowed.** Re-registering
+   throws an error.
+3. **Registration must occur before elements of that type are present in DOM.**
+   Otherwise, those pre-existing nodes are not upgraded (i.e., they act as
+   unknown elements until registration).
+4. **Registration order & timing matter:** Careful initialization sequencing
+   prevents race conditions in complex apps.
+
+### Core Class Methods for Custom Elements
+
+- A **constructor** (ES6 class constructor)
+- Lifecycle hooks: `connectedCallback`, `disconnectedCallback`,
+  `attributeChangedCallback`, and `adoptedCallback`
+- Static getter for `observedAttributes`
+- Additional application-specific methods and property accessors
+
+```javascript
+class MyElement extends HTMLElement {
+  constructor() {
+    /* ... */
+  }
+  connectedCallback() {
+    /* ... */
+  }
+  disconnectedCallback() {
+    /* ... */
+  }
+  static get observedAttributes() {
+    return ["foo", "bar"];
+  }
+  attributeChangedCallback(name, oldValue, newValue) {
+    /* ... */
+  }
+  adoptedCallback() {
+    /* ... */
+  }
+  // Other methods, event handlers, accessors, etc.
+}
+```
+
+> **Note:** All lifecycle hooks are optional except the constructor, but at
+> least `connectedCallback` is almost always used for element setup.
+
+### Lifecycle Callbacks
+
+| Method                    | Triggered When...                                         | Common Use Cases                                             |
+| ------------------------- | --------------------------------------------------------- | ------------------------------------------------------------ |
+| constructor               | Element is created or upgraded                            | Initialize internal state, event bindings, create shadow DOM |
+| connectedCallback         | Element inserted into or moved within the document        | Setup DOM/UI, data fetching, event listeners                 |
+| disconnectedCallback      | Element removed from the document                         | Tear-down, cleanup, remove event listeners                   |
+| static observedAttributes | Specifies which attributes to monitor                     | (Not called directly; enables attribute callbacks)           |
+| attributeChangedCallback  | Monitored attribute is changed, added, removed, replaced  | Respond to attribute changes (e.g., update UI/state)         |
+| adoptedCallback           | Element moved to a new document (e.g., via `adoptNode()`) | Adjust logic for cross-document context                      |
+
+#### constructor
+
+Called when the element is instantiated (via parser or
+`document.createElement`). Useful for setting up initial state, default values,
+and event handler bindings.
+
+- Must always call `super()` as the first statement.
+- **Do not interact with attributes or child elements** in the constructor—they
+  may not yet exist or be set by the parser.
+- Adding attributes and making DOM modifications should be delayed to
+  `connectedCallback`.
+
+```javascript
+class HelloPopup extends HTMLElement {
+  constructor() {
+    super();
+    this._isOpen = false;
+    // Declared state property, but defer DOM to connectedCallback
+  }
+}
+```
+
+#### connectedCallback
+
+**Invoked every time** the custom element is inserted into the document's DOM or
+moved within it. This is the preferred place to set up DOM, register event
+listeners, fetch data, and update rendering.
+
+- Can be called multiple times during an element's lifecycle.
+- DOM availability is guaranteed, but child custom elements may not be fully
+  upgraded yet (take care accessing children).
+- Use for any interactivity tied to presence in the document, not for one-time
+  initializations (those belong in the constructor).
+
+```javascript
+connectedCallback() {
+  this.innerHTML = `
+    <button>Click me</button>
+  `;
+  this.querySelector('button').addEventListener('click', this._handleClick);
+}
+```
+
+> **Note:** Cleanup should be paired with `disconnectedCallback`.
+
+#### disconnectedCallback
+
+Called each time the element is **removed** from the document, either by DOM
+manipulation or page navigation.
+
+- Used to remove event listeners, stop timers, or clean up resources to prevent
+  memory leaks.
+- May be called multiple times if an element is repeatedly inserted and removed
+  from the DOM.
+
+```javascript
+disconnectedCallback() {
+  this.querySelector('button').removeEventListener('click', this._handleClick);
+}
+```
+
+#### static get observedAttributes()
+
+A static getter that returns an array of **attribute names** to be observed for
+changes. Only attributes listed here will trigger `attributeChangedCallback`
+when modified.
+
+```javascript
+static get observedAttributes() {
+  return ['color', 'size'];
+}
+```
+
+This selective monitoring improves performance and avoids unnecessary callback
+invocations.
+
+#### attributeChangedCallback
+
+Called whenever one of the `observedAttributes` is added, removed, or changed
+(including via JavaScript `setAttribute()`/`removeAttribute()` or direct
+attribute manipulation).
+
+- Highly useful for re-rendering the element when attribute-based configuration
+  or state changes.
+- Attributes are always passed as strings (JSON encoding/decoding is needed for
+  object values, if needed).
+
+```javascript
+attributeChangedCallback(name, oldValue, newValue) {
+  if (oldValue !== newValue) {
+    if (name === 'color') {
+      this.style.color = newValue;
+    }
+  }
+}
+```
+
+For more advanced usage, map attributes to properties and keep them in sync.
+
+#### adoptedCallback
+
+This rarely-used callback triggers when the custom element is moved into a **new
+document** via methods like `document.adoptNode()`. Practical use cases include
+moving elements between iframes or handling dynamic imports with unique document
+contexts.
+
+```javascript
+adoptedCallback() {
+  // E.g., reinitialize templates, listeners, or resources tied to a specific document
+}
+```
+
+Most applications will never need adoptedCallback, but multi-document scenarios
+benefit from it.
+
+### Handling Attributes and Element Properties
+
+A subtle but crucial distinction exists between **attributes** (defined in
+markup or via `setAttribute`) and **properties** (JS object fields on the
+element).
+
+| Aspect     | Attributes                                                               | Properties                                 |
+| ---------- | ------------------------------------------------------------------------ | ------------------------------------------ |
+| Definition | Written in HTML as `<tag attr="v">`                                      | JS-accessible fields, e.g., `el.value`     |
+| Value type | Always a string                                                          | Any type (string, object, function, array) |
+| Sync?      | Initial parse: attribute values reflected as properties where applicable | Not always, must be manually reflected     |
+
+#### Best Practices
+
+- Use **attributes** for declarative, serializable configuration (HTML).
+- Use **properties** for dynamic, programmatic interaction.
+- Manual reflection between the two helps maintain state consistency.
+
+#### Syncing Attributes and Properties
+
+```javascript
+class CountingButton extends HTMLElement {
+  static get observedAttributes() {
+    return ["count"];
+  }
+  get count() {
+    return Number(this.getAttribute("count"));
+  }
+  set count(val) {
+    this.setAttribute("count", val);
+  }
+  attributeChangedCallback(name, oldValue, newValue) {
+    if (name === "count") {
+      this._updateButton();
+    }
+  }
+  _updateButton() {
+    this.textContent = `Clicked ${this.count} times`;
+  }
+}
+customElements.define("counting-button", CountingButton);
+```
+
+This example illustrates how **custom elements can expose ergonomic
+getters/setters** for working with properties, while also syncing those with
+HTML attributes for interoperability and reactivity.
+
+### Integrating Custom Elements into the DOM
+
+#### Programmatic Creation
+
+```javascript
+const myEl = document.createElement("my-greeting");
+document.body.appendChild(myEl);
+```
+
+#### Moving and Removing Elements
+
+- Insertion via `appendChild`, `insertBefore`, etc., triggers
+  `connectedCallback`.
+- Removal via `removeChild`, `remove()`, etc., triggers `disconnectedCallback`.
+
+Custom elements are natively part of the DOM event flow and can be targeted,
+queried, or iterated as with any element.
+
+#### Slots and Content Projection
+
+Shadow DOM (next section) combined with `<slot>` allows custom elements to
+accept and render child content, maintaining flexibility and composability for
+complex UI structures.
+
+### Using Shadow DOM with Custom Elements
+
+The **Shadow DOM** is an essential feature for encapsulating the internal DOM
+and CSS of custom elements, preventing style and markup leaks both in and out of
+the component.
+
+#### Attaching a Shadow Root
+
+Call `attachShadow({ mode: 'open' })` (or `'closed'`) in the constructor of your
+element class:
+
+```javascript
+class ShadowBox extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+  }
+}
+```
+
+- **`mode: 'open'`** exposes the `shadowRoot` property for direct access (e.g.,
+  `el.shadowRoot`).
+- **`mode: 'closed'`** keeps the shadow root inaccessible outside the class.
+
+#### Using Shadow DOM for Markup and Style Encapsulation
+
+```javascript
+class StyledTextarea extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this.shadowRoot.innerHTML = `
+      <style>
+        textarea { color: #336699; border-radius: 8px; padding: 8px; }
+      </style>
+      <textarea></textarea>
+    `;
+  }
+}
+customElements.define("styled-textarea", StyledTextarea);
+```
+
+Shadow DOM ensures that the textarea’s CSS and structure won’t “leak” into the
+global document, nor will outside styles affect it—enabling true component
+isolation. Use `<slot>` tags within your shadow root to facilitate content
+projection from outside the element for maximum flexibility.

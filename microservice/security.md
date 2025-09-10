@@ -1164,6 +1164,91 @@ remains within the allowed directory.
 
 ---
 
+## Clickjacking
+
+Clickjacking (also called _UI redressing_) is a malicious technique where an
+attacker tricks a user into clicking on a hidden or disguised element of a
+legitimate website. The user thinks they’re clicking a harmless button (like
+“Play” or “Claim Prize”), but they’re actually triggering an action on another
+site—like transferring money, changing settings, or liking a page on social
+media.
+
+- **Likejacking**: Tricks users into liking a page on social media.
+- **Cursorjacking**: Misleads users about the location of their cursor.
+- **Filejacking**: Gains access to local files via deceptive UI.
+- **Cookiejacking**: Steals browser cookies through drag-and-drop interactions.
+
+### How Does It Work?
+
+Clickjacking typically involves layering content using HTML and CSS tricks:
+
+- **Invisible iframe**: The attacker embeds the target site in an invisible
+  iframe over their own page.
+- **CSS opacity and z-index**: They use styles to make the iframe nearly
+  invisible and position it precisely over a visible button.
+- **Deceptive UI**: The user sees a button or link that looks legitimate, but
+  their click is hijacked to interact with the hidden site.
+
+### How to Prevent Clickjacking
+
+#### Server-Side
+
+- **X-Frame-Options Header**: This HTTP header tells the browser whether your
+  site can be embedded in an iframe.
+  - `DENY`: Prevents all framing.
+  - `SAMEORIGIN`: Allows framing only by pages from the same origin.
+- **Content Security Policy (CSP)**: Use the `frame-ancestors` directive to
+  control which domains can embed your content.
+
+#### Client-Side
+
+- **Frame Busting Scripts**: JavaScript that prevents your site from being
+  loaded in a frame. (Less reliable due to modern browser restrictions.)
+- **UI Design Awareness**: Avoid placing sensitive actions behind a single
+  click. Use confirmation dialogs or CAPTCHA.
+
+---
+
+## Phishing
+
+Fraudulent tactics to trick users into divulging sensitive data. Detection and
+prevention rely on AI-driven analysis, URL filtering, behavioral monitoring,
+email scanning, user education, MFA, patch management, and threat intelligence
+sharing. Anti-phishing solutions integrate multiple detection vectors for
+comprehensive defense.
+
+---
+
+## Forward Secrecy
+
+Property of cryptography where compromise of long-term keys doesn’t risk past
+session data. Achieved via ephemeral (EC)DH exchanges—TLS 1.3 only allows
+forward-secret modes. Widely adopted, and increasingly mandated in modern
+browser and mobile OS stacks. It does NOT prevent MitM if actively present
+during exchange, but limits post-hoc decryption risks—even if key leaks later.
+
+---
+
+## SSL Stripping
+
+A downgrade attack where MITM actors force HTTPS requests back to HTTP, exposing
+data in plaintext. Defense includes always-on HTTPS, HSTS
+(Strict-Transport-Security header), and user vigilance. Browsers and major sites
+now make SSL stripping much harder, but gaps remain on misconfigured servers or
+initial connections.
+
+---
+
+## BEAST Attack
+
+Cipher block chaining (CBC) attack against TLS 1.0/SSL, allowing byte-at-a-time
+decryption by exploiting weaknesses in IV initialization. Mitigated via
+disabling legacy protocols, switching to TLS 1.2+ with secure ciphers, and
+retiring RC4 as a stopgap. BEAST highlights the enduring risk of legacy device
+and protocol support in critical infrastructure.
+
+---
+
 ## Security Logging and Monitoring
 
 ### Importance
@@ -1221,15 +1306,290 @@ investigating incidents (avoid sensitive data).
 
 ---
 
+## Cross-Origin Resource Sharing (CORS)
+
+**CORS** is a security feature designed to relax the browser's `same-origin`
+policy, allowing controlled interaction between resources from different
+origins. By default, browsers prevent web applications loaded from one origin
+(protocol, domain, port) from requesting resources from another, safeguarding
+against certain cross-origin attacks. CORS allows servers to specify, via HTTP
+headers, which external origins may access resources, which methods are
+permissible, and under what conditions credentials such as cookies or HTTP
+authentication can be included.
+
+The most significant headers relating to CORS include:
+
+- `Access-Control-Allow-Origin`
+- `Access-Control-Allow-Methods`
+- `Access-Control-Allow-Headers`
+- `Access-Control-Allow-Credentials`
+
+CORS is not, itself, a comprehensive security feature but rather a tool to
+define safe and intentional cross-origin interactions.
+
+### Practical Application in Angular and ASP.NET
+
+#### Angular Frontend
+
+Angular’s HttpClient implicitly sets the `Origin` request header for
+cross-origin interactions. No specific CORS configuration is required on the
+frontend, but when making cross-origin requests (for example, Angular app at
+`localhost:4200` to an API at `localhost:5001`), the backend must set the
+correct CORS response headers.
+
+Example Angular call:
+
+```typescript
+import { HttpClient } from "@angular/common/http";
+@Injectable()
+export class DataService {
+  constructor(private http: HttpClient) {}
+  getData() {
+    return this.http.get("https://api.example.com/data");
+  }
+}
+```
+
+No special client configuration is required. Misconfiguration errors such as "No
+`Access-Control-Allow-Origin` header is present" are handled on the backend.
+
+#### ASP.NET Backend
+
+CORS is enabled in ASP.NET Core by configuring middleware to specify allowed
+origins, methods, headers, and credentials. The order of middleware registration
+is vital: CORS configuration must appear before `UseAuthorization` and endpoint
+mappings.
+
+**Typical setup in Program.cs:**
+
+```csharp
+var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(name: MyAllowSpecificOrigins,
+        policy =>
+        {
+            policy.WithOrigins("http://localhost:4200")
+                  .AllowAnyMethod()
+                  .AllowAnyHeader();
+        });
+});
+...
+var app = builder.Build();
+// Ensure CORS is used before routing and authorization
+app.UseHttpsRedirection();
+app.UseStaticFiles();
+app.UseRouting();
+app.UseCors(MyAllowSpecificOrigins);
+app.UseAuthorization();
+app.MapControllers();
+```
+
+##### Snippet: Allowing CORS for a Specific Origin
+
+```csharp
+// In Program.cs/Startup.cs
+services.AddCors(options =>
+{
+    options.AddPolicy("MyPolicy",
+        builder => builder.WithOrigins("http://localhost:4200")
+                          .AllowAnyHeader()
+                          .AllowAnyMethod());
+});
+
+// Later in the middleware pipeline
+app.UseCors("MyPolicy");
+```
+
+##### Attribute-based CORS (fine-grained control)
+
+ASP.NET Core allows decorating controllers/actions with
+`[EnableCors("MyPolicy")]` for more granular access.
+
+##### Angular Proxy Workaround
+
+During development, you can also proxy API requests to avoid CORS issues
+altogether, using `proxy.conf.json` in Angular's root directory, instructing
+Angular CLI to forward requests to the backend.
+
+### Attacks Prevented by CORS
+
+CORS policies **do not directly prevent attacks** such as CSRF or XSS but
+prevent unauthorized websites from reading sensitive response data by blocking
+or restricting cross-origin requests. However, poor CORS configuration—such as
+reflecting the request `Origin` value, allowing `' * '` with credentials, or
+indiscriminately allowing all origins—**can introduce severe vulnerabilities**
+and enable privilege escalation, XSS, or unauthorized API access.
+
+### Environments of Peak Effectiveness
+
+- Applications serving SPAs (Single Page Applications) from a separate origin
+  than their API backend.
+- APIs exposed to third-party integrations.
+- Microservices architectures utilizing separate subdomains for different
+  service layers.
+- Public APIs requiring limited, controlled external access.
+
+Poor CORS configuration, particularly with wildcard origins and credentials, is
+a leading cause of serious web vulnerabilities affecting both Angular and .NET
+Core environments.
+
+---
+
+## `Access-Control-Allow-Credentials: true`
+
+The `Access-Control-Allow-Credentials` header enables the browser to send
+cookies, authorization headers, or TLS client certificates in cross-origin
+requests. By default, unless this header is set to `'true'`, browsers will not
+include credentials in these requests—even if allowed by the JavaScript `fetch`
+or `XHR` configuration.
+
+Combined with `.withCredentials = true` in JavaScript—for example, `{
+withCredentials: true }` in Angular’s HttpClient—this allows APIs to recognize
+authenticated users across cross-origin requests.
+
+> **Important Caveat:** When `Access-Control-Allow-Credentials: true` is set,
+> the `Access-Control-Allow-Origin` **cannot be wild-card `' * '` but must be a
+> specific origin**.
+
+### Practical Application
+
+#### Angular Frontend
+
+When making requests that must include user credentials or cookies across
+origins:
+
+```typescript
+this.http.get("https://api.example.com/user", { withCredentials: true });
+```
+
+#### ASP.NET Backend
+
+Configure CORS policy with `AllowCredentials()` and do **not** use
+`.AllowAnyOrigin()`:
+
+```csharp
+services.AddCors(options =>
+{
+    options.AddPolicy("WithCredentialsPolicy",
+        builder => builder.WithOrigins("http://localhost:4200")
+                          .AllowAnyHeader()
+                          .AllowAnyMethod()
+                          .AllowCredentials());
+});
+```
+
+**Note:** Using `.AllowAnyOrigin()` in conjunction with `.AllowCredentials()`
+will throw a runtime error or result in failed requests.
+
+**Cookie Policy for ASP.NET Core:** If using authentication cookies, set
+`SameSite=None` and `Secure=true`:
+
+```csharp
+services.Configure<CookiePolicyOptions>(options =>
+{
+    options.MinimumSameSitePolicy = SameSiteMode.None;
+    options.Secure = CookieSecurePolicy.Always;
+});
+```
+
+**Use in middleware:**
+
+```csharp
+app.UseCookiePolicy();
+```
+
+### Attacks Mitigated and Risks
+
+By itself, this header does not prevent attacks but **enables secure sessions or
+authenticated cross-origin requests**.
+
+- **Risk:** If used in conjunction with overly permissive origins, it opens APIs
+  up to credential theft and cross-site attacks.
+- **Best Practice:** Only allow trusted and necessary origins and combine with
+  robust authentication checks server-side.
+
+### Peak-Use Scenarios
+
+- Authenticated SPAs needing to persist sessions.
+- Secure APIs requiring token/cookie authentication across origins.
+- Modern distributed microservice applications using SSO.
+
+---
+
+## Cross-Origin Resource Policy (CORP)
+
+The **Cross-Origin Resource Policy** is enforced via the
+`Cross-Origin-Resource-Policy` header. It is designed to **prevent certain
+cross-origin "side channel" attacks** (like XS-Leaks, Spectre, or Meltdown),
+which exploit the way browsers fetch and render resources used in elements such
+as `<script>`, `<img>`, or `<iframe>`.
+
+**Header values:**
+
+- `same-origin`: Only same-origin resource requests are allowed.
+- `same-site`: Allows all same-site origins to access.
+- `cross-origin`: Allows requests from all origins.
+
+When set, the browser constrains the availability of resource content based on
+the origin of the request.
+
+### Practical Application
+
+#### ASP.NET Backend
+
+Adding the header to sensitive endpoints or for static files (for example,
+images, fonts) via middleware:
+
+```csharp
+app.Use(async (context, next) =>
+{
+    context.Response.OnStarting(() =>
+    {
+        context.Response.Headers.Add("Cross-Origin-Resource-Policy", "same-origin");
+        return Task.CompletedTask;
+    });
+    await next();
+});
+```
+
+#### Angular Frontend
+
+Angular itself does not directly interact with this header, as it is strictly a
+browser/server policy. However, if your Angular app loads third-party resources
+that require this header, those resources must serve it appropriately.
+
+### Attacks Prevented
+
+- Spectre/Meltdown “XS-Leaks”
+- Unauthorized resource sharing via cross-origin embedding
+
+### Effectiveness and Environments
+
+- Highly effective in protecting sensitive APIs and resources (e.g.,
+  authenticated REST endpoints, internal assets).
+- Broadly applicable for APIs handling private data or company internal tools.
+
+---
+
 ## Content Security Policy (CSP)
 
-A Content Security Policy is an HTTP header (or meta tag) that lets a website
-define exactly which sources of content are safe, such as scripts, styles,
-images, iframes, and more. By explicitly listing approved origins, CSP blocks
-untrusted inline or external resources, significantly reducing risks like
-cross-site scripting (XSS), clickjacking, and code injection.
+**Content Security Policy** is an extensive browser feature that instructs the
+browser where and how resources (JavaScript, CSS, images, etc.) can be loaded
+and executed from a website. CSP is **the single most effective defense against
+XSS** and facilitates granular control over content loading and script
+execution, enforcing-origin integrity.
 
-Key CSP directives:
+A CSP is delivered via the `Content-Security-Policy` header. The syntax consists
+of directives specifying permitted sources for each resource type.
+
+**Example policy:**
+
+```
+Content-Security-Policy: default-src 'self'; img-src https:; script-src 'self' https://apis.google.com; object-src 'none'; frame-ancestors 'none'; style-src 'self' 'unsafe-inline';
+```
+
+### Key CSP directives
 
 - `default-src`: fallback for all content types.
 - `script-src`: allowed origins for JavaScript.
@@ -1247,21 +1607,352 @@ Content-Security-Policy:
   frame-ancestors 'none'; // prevent other pages to embed site
 ```
 
+### Practical Application
+
+#### ASP.NET Backend
+
+##### Setting CSP Header in Middleware
+
+```csharp
+app.Use(async (context, next) =>
+{
+    context.Response.OnStarting(() =>
+    {
+        context.Response.Headers.Add("Content-Security-Policy",
+            "default-src 'self'; img-src 'self' https://images.example.com; script-src 'self'; style-src 'self'; object-src 'none'");
+        return Task.CompletedTask;
+    });
+    await next();
+});
+```
+
+#### Angular Frontend
+
+##### Enabling CSP Compatibility
+
+Angular (especially versions >=9) requires careful consideration because of
+build tools, polyfills, and third-party packages. By default, Angular's build
+does not include inline scripts, but polyfills or older code may still trigger
+CSP violations if restrictive policies like `'unsafe-inline'` are set for
+`script-src`.
+
+- For production, **avoid using `unsafe-inline`** for `script-src`, and ensure
+  all scripts are loaded with proper SRI (Subresource Integrity).
+- If using Angular CLI, CSP compatibility is generally high, but some
+  configurations (like strict CSP with `'unsafe-eval'` disallowed) may cause
+  issues with zone.js or legacy code.
+
+##### Example: CSP meta tag (for static hosting of Angular)
+
+```html
+<meta
+  http-equiv="Content-Security-Policy"
+  content="default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'"
+/>
+```
+
+> But **prefer server-set header** for stronger enforcement.
+
+### Attacks Prevented
+
+- XSS (cross-site scripting)
+- Data injection attacks
+- Clickjacking (using `frame-ancestors`)
+- Mixed content (if combined with other headers)
+
+### Environments
+
+- Vital for all production applications, especially those handling sensitive
+  data or being publicly accessible.
+- **Note:** Weak or misconfigured policies may lessen effectiveness.
+
+---
+
+## X-Frame-Options
+
+The `X-Frame-Options` header instructs the browser whether the content is
+allowed to be rendered within a `<frame>`, `<iframe>`, `<embed>`, or `<object>`.
+Its primary function is to prevent **clickjacking attacks**, where malicious
+sites try to trick users into clicking on hidden interfaces.
+
+Values:
+
+- `DENY`: Prevent all framing of the content.
+- `SAMEORIGIN`: Allow framing only from the same origin.
+- `ALLOW-FROM uri` (obsolete, limited support).
+
+> **Note:** The `frame-ancestors` directive in CSP (`Content-Security-Policy:
+frame-ancestors ...`) is the modern, preferred solution, but `X-Frame-Options`
+> is still widely supported.
+
+### Practical Implementation
+
+#### ASP.NET Backend
+
+**Middleware example:**
+
+```csharp
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.Add("X-Frame-Options", "DENY");
+    await next();
+});
+```
+
+#### Angular Applications
+
+Angular cannot set X-Frame-Options because browser enforcement is strictly based
+on HTTP headers set by the web server. Attempting to specify it in a meta tag
+will have no effect; use your server (Node.js, IIS, Apache, Nginx, etc.) to emit
+this header.
+
+### 5.3 Attacks Prevented
+
+- Clickjacking (UI redress attacks)—malicious overlays or hidden frames tricking
+  users into unintended actions.
+
+### 5.4 Effectiveness and Recommendation
+
+Still effective for older browsers; for modern browsers prefer CSP’s
+`frame-ancestors` for finer control. Use both headers for maximum coverage in
+production.
+
+---
+
 ## HTTP Strict Transport Security (HSTS)
 
-HTTP Strict Transport Security is a response header which tells browsers: for a
-set duration, always use HTTPS to connect—and never allow HTTP or bypass TLS
-errors. It defends against downgrade (SSL-stripping) attacks and protects
-sensitive cookies from being sent in plaintext over HTTP.
+The `Strict-Transport-Security` header enforces HTTPS connections by instructing
+browsers to never load the site via insecure HTTP for a specified duration. Once
+enabled, even user-typed `http://` in the address bar is automatically upgraded
+by the browser.
+
+```http
+Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+```
 
 **Serve the HSTS header only over HTTPS—if sent via HTTP it’s ignored.**
 
 **Configure your server to respond to all HTTP requests with an HTTP 301
 (Permanent) or 302 (Temporary) redirect pointing to the HTTPS version.**
 
+### Implementation in ASP.NET
+
+```csharp
+app.UseHsts();
 ```
-Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+
+Or via middleware options:
+
+```csharp
+app.UseHsts(options => options.MaxAge(days: 365).IncludeSubDomains().Preload());
 ```
+
+> HSTS should **not** be used on **development environments** or **localhost**,
+> as browsers will cache HSTS and may block local HTTP connections thereafter.
+
+### Attacks Prevented
+
+- Man-in-the-middle attacks via protocol downgrades or SSL stripping. and
+  protects sensitive cookies from being sent in plaintext over HTTP.
+
+### Environments
+
+- All production-facing HTTPS endpoints, web apps, SPAs, and especially sites
+  handling sensitive information.
+
+---
+
+## `X-Content-Type-Options`
+
+Instructs browsers not to "MIME-sniff" content and to only execute scripts and
+stylesheets with matching Content-Type headers, preventing misinterpretation of
+files as executable code.
+
+```http
+X-Content-Type-Options: nosniff
+```
+
+### ASP.NET
+
+```csharp
+app.UseXContentTypeOptions();
+```
+
+Or:
+
+```csharp
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.Add("X-Content-Type-Options", "nosniff");
+    await next();
+});
+```
+
+### Attacks Prevented
+
+- MIME type confusion, drive-by downloads, and certain XSS techniques via
+  disguised files.
+
+---
+
+## Referrer-Policy
+
+Controls how much referrer data is sent in outbound requests, mitigating data
+leakage and protecting user privacy.
+
+Example:
+
+```http
+Referrer-Policy: no-referrer
+Referrer-Policy: same-origin
+```
+
+> Recommended: `strict-origin-when-cross-origin` (the current browser default)
+> for converting URLs to their origin on cross-origin requests.
+
+### Implementation in ASP.NET
+
+```csharp
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.Add("Referrer-Policy", "strict-origin-when-cross-origin");
+    await next();
+});
+```
+
+### Attacks Prevented
+
+- Exposure of sensitive URLs or internal resource structure.
+- Potential information leaks over third-party requests.
+
+---
+
+## `Permissions-Policy` (Formerly `Feature-Policy`)
+
+Grants or denies permission for browser features and APIs (like geolocation,
+camera, microphone, fullscreen, etc.) on a per-origin basis:
+
+```http
+Permissions-Policy: geolocation=(), camera=()
+```
+
+**Syntax:** A blank set disables the feature for all contexts; or allow for
+certain origins:
+
+```http
+Permissions-Policy: geolocation=(self "https://trustedpartner.com")
+```
+
+### Implementation in ASP.NET
+
+```csharp
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.Add("Permissions-Policy", "geolocation=(); camera=()");
+    await next();
+});
+```
+
+### Angular Integration
+
+As with `X-Frame-Options`, must be set on the web server serving the Angular
+app.
+
+### Attacks Mitigated
+
+- Attacks leveraging excessive browser APIs (e.g., unauthorized access to
+  devices/capabilities).
+- Privacy invasions via rogue or third-party scripts.
+
+---
+
+## Subresource Integrity (SRI)
+
+A newer browser feature that allows browsers to verify that fetched resources
+(usually from a CDN or third-party) have not been altered. You add an
+`integrity` attribute to `<script>` or `<link>` tags, supplying a hash of the
+file’s content.
+
+```html
+<script
+  src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"
+  integrity="sha384-oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxy9rx7HNQlGYl1kPzQho1wx4JwY8wC"
+  crossorigin="anonymous"
+></script>
+```
+
+### Angular
+
+SRI can be enabled automatically in production builds:
+
+```bash
+ng build --subresource-integrity
+```
+
+Or, add `"subresourceIntegrity": true` in `angular.json`.
+
+### ASP.NET
+
+Use helper libraries to generate SRI hashes for client resources.
+
+### Attacks Prevented
+
+- Malicious code injection if CDN or third-party scripts are compromised.
+
+### Limitations
+
+- Requires resources to be immutable; version bumps or file changes require new
+  hashes.
+
+---
+
+### `X-XSS-Protection`
+
+Historically, this header could enable browser-level filtering for reflected XSS
+attacks:
+
+```http
+X-XSS-Protection: 1; mode=block
+```
+
+However, it is deprecated (particularly in Chrome/Edge/Firefox), and not
+recommended for modern sites relying on CSP, as poorly implemented browser XSS
+protections can make sites **more** vulnerable under certain conditions.
+
+### ASP.NET
+
+```csharp
+app.UseXXssProtection(options => options.EnabledWithBlockMode());
+```
+
+Or:
+
+```csharp
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.Add("X-XSS-Protection", "1; mode=block");
+    await next();
+});
+```
+
+**Best Practice:** Rely primarily on CSP for reflected and stored XSS
+prevention.
+
+---
+
+## `Expect-CT`
+
+The `Expect-CT` header was designed to enforce Certificate Transparency (CT),
+ensuring all SSL/TLS certificates are publicly logged to prevent misissuance and
+man-in-the-middle attacks using rogue certificates.
+
+```http
+Expect-CT: enforce, max-age=86400, report-uri="https://example.com/report"
+```
+
+> **Relevance Today:** Support has largely shifted to browsers enforcing CT by
+> default. As of 2025, this header is considered obsolete but does not harm by
+> inclusion.
 
 ---
 
@@ -1357,6 +2048,108 @@ Pros:
 Cons:
 
 - Resets on refresh—requires reauthentication or silent token refresh.
+
+## Secure Refresh Token Storage
+
+### Client side
+
+- **Browser apps** → Store in **HttpOnly, Secure, SameSite=strict cookies** so
+  JavaScript can’t read them (mitigates XSS) and they’re only sent over HTTPS.
+- **Mobile/desktop apps** → Use OS-provided secure storage (e.g., iOS Keychain,
+  Android Keystore, Windows Credential Locker).
+- **Never** store refresh tokens in localStorage or sessionStorage — they’re
+  vulnerable to XSS.
+
+### Server side
+
+- Store **hashed** versions of refresh tokens (like passwords) in a database or
+  secure cache (e.g., Redis) so even if the DB leaks, the raw token isn’t
+  exposed.
+- Include a **unique identifier** (`jti` claim or UUID) for each token to track
+  and revoke them individually.
+- Associate tokens with metadata: user ID, device, IP, creation time, and
+  expiration.
+
+## Secure Refresh Token Invalidation & Rotation
+
+### Token Rotation
+
+- Every time a refresh token is used, issue a **new** one and immediately
+  invalidate the old one in the database.
+- This prevents **replay attacks** — if an attacker steals an old token, it’s
+  already useless.
+
+### Revocation
+
+- Maintain a **server-side blacklist** or “revoked tokens” table keyed by `jti`.
+- If a user logs out, changes password, or an anomaly is detected (e.g., unusual
+  IP/device), mark the token as revoked.
+- Redis or similar in-memory stores are often used for **fast revocation
+  checks**.
+
+### Expiration
+
+- Set a **reasonable lifetime** (e.g., days or weeks) for refresh tokens.
+- Shorter lifetimes reduce the window of exposure if a token is stolen.
+
+---
+
+## Secure Cookie Setup
+
+Best practice for secure cookies mandates:
+
+- Secure (`Secure`) flag: Only sent over HTTPS
+- HttpOnly: Inaccessible to client scripts, reduces XSS and CSRF risks
+- SameSite (`Lax` or `Strict`): Prevents cross-origin leaks and clickjacking
+- Path/Domain: Scope minimal
+- Proper expiry: Limit session duration, especially for authentication tokens
+- Prefixes (`__Host-`, `__Secure-`): Restrict overwriting by malicious actors
+
+```typescript
+this.http.post("/api/account/login", credentials, {
+  withCredentials: true,
+});
+```
+
+```csharp
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.Cookie.Name = "__Host-AuthCookie"; // Prefix for extra security
+        options.Cookie.HttpOnly = true;            // Prevent access via JS
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // HTTPS only
+        options.Cookie.SameSite = SameSiteMode.Strict; // Prevent CSRF
+        options.Cookie.Path = "/";                 // Required for __Host- prefix
+        options.Cookie.Domain = null;              // No domain for __Host- prefix
+        options.Cookie.MaxAge = TimeSpan.FromMinutes(30); // Expiry
+        options.SlidingExpiration = true;          // Extend session on activity
+        options.LoginPath = "/account/login";      // Redirect path
+    });
+```
+
+```csharp
+[HttpPost]
+public async Task<IActionResult> Login([FromBody] LoginModel model)
+{
+    if (IsValidUser(model))
+    {
+        var claims = new List<Claim> { new Claim(ClaimTypes.Name, model.Username) };
+        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+        var principal = new ClaimsPrincipal(identity);
+
+        await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal,
+            new AuthenticationProperties
+            {
+                IsPersistent = true,
+                ExpiresUtc = DateTime.UtcNow.AddMinutes(30)
+            });
+
+        return Ok();
+    }
+
+    return Unauthorized();
+}
+```
 
 ---
 

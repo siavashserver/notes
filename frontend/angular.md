@@ -1926,6 +1926,28 @@ client.
 
 ---
 
+## Bundling Strategies
+
+Modern build pipelines use bundlers like Webpack to produce optimized and
+cache-friendly asset bundles, supporting code splitting and dynamic loading.
+
+- **Code Splitting:** Divides the codebase into async-loaded chunks to optimize
+  startup time.
+- **Shared Dependencies:** Via `SplitChunksPlugin` or `dependOn`, deduplicates
+  repeated modules.
+- **Dynamic Imports:** Loads modules on demand.
+
+---
+
+## Cache Busting
+
+Cache busting ensures clients receive new code versions via unique file hashes
+in bundle names, reducing bugs from stale assets. Proper CDN, prefetch/preload
+hints, and analysis tools (webpack-bundle-analyzer) complete the modern
+optimization suite.
+
+---
+
 ## RxJS
 
 ### Common Angular + RxJS Scenarios
@@ -2247,3 +2269,18 @@ differences:
   operators like `map`, `filter`, and `mergeMap`.
 
 - Promises: Resolve a single value once and cannot be cancelled.
+
+### What is Time To First Byte (TTFB)?
+
+TTFB measures the time from a user's request to when the browser receives the
+first byte of a response. It encompasses network latency, backend processing,
+and dynamic resource fetching, and influences all paint and interactivity
+metrics that follow. Optimal TTFB is ≤ 0.8 seconds; higher times are symptomatic
+of hosting, network, or backend issues. TTFB can be improved via CDNs,
+compression, cache control, efficient database access, and server-side rendering
+optimizations.
+
+### What is Optimistic UI?
+
+Implements state changes on the client as soon as an action is triggered (e.g.,
+form submit), rolling back only if the operation fails on the server side.

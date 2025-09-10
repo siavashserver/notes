@@ -32,11 +32,22 @@ ROLLBACK;
 - Non-repeatable Reads: Subsequent attempts to read the same data from within the same transaction return different results.
 - Phantom Reads: Subsequent reads within the same transaction return new rows.
 
+### Write Skew
+
+Arises under snapshot isolation, allowing concurrent transactions to observe
+disjoint states. Write skew can occur when two transactions read overlapping
+data, then each writes a complementary piece, resulting in a final state that
+violates business invariants (e.g., in a medical shift schedule both doctors
+simultaneously schedule time off, leaving a shift uncovered). Serializability
+isolation can prevent this; snapshot isolation cannot.
+
 ### Second Lost Update
 
 It occurs when two transactions are trying to update the same record at the same
 time, and the update from the first transaction is lost because the second
-transaction overwrites it.
+transaction overwrites it. Strategies to prevent lost updates include optimistic
+and pessimistic locking, increased isolation levels, and atomic write
+operations.
 
 ## Concurrency Models
 

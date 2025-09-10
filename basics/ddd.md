@@ -100,6 +100,12 @@ be combined and reused.
   domain and its alignment with business goals. They deal with bounded contexts,
   context mapping, and identifying core, supporting, and generic subdomains.
 
+  | Subdomain Type           | Purpose                                                                            | Characteristics                                                                                                                                         | Example                                                                        |
+  | ------------------------ | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+  | **Core Subdomain**       | The heart of your business — the thing that gives you a **competitive advantage**. | - Unique to your business<br>- Cannot be bought “off the shelf”<br>- Needs your **best people** working on it<br>- Small in code size but high in value | For Amazon: Recommendation engine; For a bank: Risk assessment model           |
+  | **Supporting Subdomain** | Helps the core domain function but is **not** the differentiator.                  | - Important but not unique<br>- Can be built in-house with less rigor<br>- Can be delegated to less experienced devs or even outsourced                 | For Amazon: Seller onboarding tools; For a bank: Customer notification service |
+  | **Generic Subdomain**    | Common capabilities that **many businesses** need.                                 | - Not unique at all<br>- Often better to buy or use open-source<br>- Avoid reinventing the wheel                                                        | Payment processing, authentication, invoicing                                  |
+
 - Tactical Patterns: Focus on the detailed implementation within the bounded
   contexts. They deal with entities, value objects, aggregates, repositories,
   factories, and domain services.
@@ -255,9 +261,13 @@ customer-supplier, anti-corruption layer, etc.).
 A translation layer to protect your model from external models’ semantics,
 avoiding “model pollution”.
 
-### When to use a Shared Kernel?
+### What is a Shared Kernel?
 
-Only for a **small, stable** set of concepts used identically in multiple
+A **Shared Kernel** is a **collaboration pattern** in DDD for when **two or more
+teams** work in different **Bounded Contexts** but must share a **small,
+well-defined part of the model**.
+
+Used only for a **small, stable** set of concepts used identically in multiple
 contexts — otherwise, it increases coupling.
 
 ### Rule of thumb for aggregate size?

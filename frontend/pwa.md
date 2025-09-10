@@ -105,6 +105,16 @@ intercept it, prevent default UI, and show your custom **Install** button. Then
 call `event.prompt()` to show the dialog and check `event.userChoice` to track
 acceptance.
 
+### What are PWA Lifecycle Events?
+
+| Event                 | Description                                             |
+| --------------------- | ------------------------------------------------------- |
+| `beforeinstallprompt` | Fired when the browser determines installation possible |
+| `appinstalled`        | PWA has been installed                                  |
+| `fetch`               | Service worker intercepts resource requests             |
+| `activate`            | SW activation post-installation/update                  |
+| `install`             | SW installation, first-time caching                     |
+
 ### What are the limitations of PWAs compared to native apps?
 
 PWAs have limited access to device hardware and OS-level features (e.g.,
