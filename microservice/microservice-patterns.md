@@ -162,9 +162,12 @@ consistency, and the process of defining service APIs and collaborations.
     packaged together. Applied to services, this means services should ideally
     contain all the code that changes for a given reason.
 - **Obstacles to Decomposition:**
-  - **Network latency:** Interprocess communication adds latency.
+  - **Network latency:** Interprocess communication adds latency. (use batch
+    operation to minimize its effect)
+  - **Sync IPC reduces availability:** use async messaging instead.
   - **Maintaining data consistency across services:** Requires sagas instead of
     traditional distributed transactions.
+  - **Obtaining a consistent view of data:** not easy like ACID in monolith.
   - **God classes:** Classes with too many responsibilities (e.g., a bloated
     `Order` class) create tangled dependencies, making decomposition difficult.
     DDD principles with separate domain models per service provide a solution.
@@ -303,6 +306,29 @@ Transactional Outbox, Polling Publisher, and Transaction Log Tailing**.
     performance bottleneck.
   - **Message Ordering:** Achieved using **sharded (partitioned) channels** with
     a **shard key**.
+
+  - **Message Delivery Types:**
+
+    - **At Most Once**
+
+      - **Guarantee:** Delivered zero or one time (≤ 1 delivery)
+      - **Risk:** Possible message loss
+      - **Complexity:** Low
+      - **Common Use Cases:** Non‑critical logs, telemetry
+
+    - **At Least Once**
+
+      - **Guarantee:** Delivered one or more times (≥ 1 delivery)
+      - **Risk:** Possible duplicates
+      - **Complexity:** Medium
+      - **Common Use Cases:** Event processing, payments (with idempotency)
+
+    - **Exactly Once**
+      - **Guarantee:** Delivered exactly one time
+      - **Risk:** None (ideal scenario)
+      - **Complexity:** High
+      - **Common Use Cases:** Financial transactions, inventory updates
+
   - **Handling Duplicate Messages:** Most brokers guarantee at-least-once
     delivery, so handlers must be **idempotent** or track messages to discard
     duplicates.
@@ -442,23 +468,43 @@ provides a detailed example of the **Create Order Saga**.
   transactions**, meaning concurrent sagas might read or write data in ways they
   wouldn't if executed serially, leading to **anomalies** (e.g., dirty reads,
   lost updates).
-- **Countermeasures for Lack of Isolation:** Strategies to prevent or reduce the
-  impact of concurrency anomalies.
+- **Saga Transaction Types**:
   - **Compensatable Transactions:** Can be rolled back by a compensating
     transaction.
   - **Pivot Transaction:** The "go/no-go" point in a saga; if it commits, the
     saga is guaranteed to complete.
-  - **Retriable Transactions:** Follow the pivot transaction and are guaranteed
-    to succeed.
+  - **Retriable Transactions:** Follows the pivot transaction and are guaranteed
+    to succeed. In case of failure, they are retriable and idempotent.
+- **Countermeasures for Lack of Isolation:** Strategies to prevent or reduce the
+  impact of concurrency anomalies.
   - **Semantic Lock:** An application-level lock that sets a flag in a record
     updated by a saga to prevent other sagas from concurrently modifying it.
   - **Pessimistic View:** Reordering saga steps to minimize business risk by
     moving critical (e.g., credit increase) operations to later, retriable
     stages.
   - **Reread Value:** Prevents dirty writes by rereading data to verify it's
-    unchanged before updating.
+    unchanged before updating. **Optimistic Offline Lock** is a concurrency
+    control strategy used when multiple business transactions might work with
+    the same data, but the likelihood of conflicts is low. The "**re-read
+    value**" part refers to how the pattern detects conflicts — by re-reading a
+    key value (often a version number or timestamp) from the database before
+    committing changes, and comparing it to the value originally read when the
+    data was first loaded.
+    - **Optimistic** → Assumes conflicts are rare, so it doesn’t lock data
+      during the edit.
+    - **Offline** → The business transaction may span multiple system
+      transactions (e.g., user edits a form for minutes), so the DB’s built-in
+      locks aren’t held the whole time.
+    - **Re-read value** → The conflict check happens at commit time by comparing
+      the original and current concurrency token.
   - **Commutative Updates:** Designing update operations to be executable in any
     order.
+  - **Version file:** it’s a logical record or field that stores the **current
+    version of an entity**. Each time a saga step updates that entity, it
+    **increments the version**. When another saga step (or another saga
+    entirely) tries to update the same entity, it **checks the version** it read
+    earlier against the current version in storage. If the versions don’t match,
+    it means **someone else has modified the entity** since you last read it.
   - **By Value:** Dynamically selecting concurrency mechanisms based on the
     business risk of each request (e.g., sagas for low risk, distributed
     transactions for high risk).
@@ -670,6 +716,18 @@ event-sourcing based saga participants and orchestrators.
 
 **Key Concepts/Patterns Explained:**
 
+- **Traditional Persistence Troubles:**
+  - **Object–Relational Impedance Mismatch:** The friction between
+    object-oriented domain models and relational database tables, leading to
+    awkward mapping, extra boilerplate, and leaky abstractions.
+  - **Lack of Aggregate History:** Traditional CRUD stores only the latest state
+    of an entity, losing the full sequence of changes over time.
+  - **Audit Logging Is Tedious & Error-Prone:** Manually tracking who changed
+    what and when often requires repetitive code scattered across the app,
+    making it easy to miss cases.
+  - **Event Publishing Bolted On:** Domain events are added as an afterthought,
+    tangled with business logic instead of being a natural part of the
+    persistence flow.
 - **Event Sourcing Pattern:** Persists an aggregate as a **sequence of domain
   events** that represent state changes. The current state of an aggregate is
   **reconstructed by replaying its events**.
@@ -677,9 +735,14 @@ event-sourcing based saga participants and orchestrators.
     the _current state_ in rows/tables. Event Sourcing stores the _changes_
     (events).
   - **Aggregate Methods:** In Event Sourcing, command methods on an aggregate
-    root **generate events** without changing state; separate `apply()` methods
+    root, **generate events** without changing state; separate `apply()` methods
     take an event and update the aggregate's state. `process()` methods take
     commands and return events.
+- **Event Publishing Methods:**
+  - **Polling:** store events in a separate table, poll for and publish events,
+    mark them as published.
+  - **Transaction Log Tailing:** use an event store to instantly put new events
+    on a message broker.
 - **Event Store:** A hybrid of a **database and a message broker**. It provides
   an API for inserting/retrieving aggregate events by primary key and an API for
   subscribing to events.
@@ -711,8 +774,9 @@ event-sourcing based saga participants and orchestrators.
     mechanisms like **upcasting** (upgrading events to the latest version when
     loaded) to avoid bloated aggregate code.
   - **Deleting Data:** Tricky because events are stored forever. Requires
-    techniques like **encryption** or **pseudonymization** to comply with
-    regulations like GDPR.
+    techniques like **encryption** (and throwing away the encryption key on
+    request) or **pseudonymization** (eg: using a uuid instead of real email,
+    and linking that to emails table) to comply with regulations like GDPR.
   - **Querying Event Store is Challenging:** Event stores primarily support
     primary key lookups. Complex queries (e.g., finding customers with zero
     credit) typically require **CQRS views** (Chapter 7).
@@ -857,9 +921,9 @@ Order History view is provided.
       responsible for implementing a high-volume/critical query.
     - **Event Sourcing applications:** Event stores are difficult to query,
       making CQRS essential.
-    - **Query-Only Services:** A specific application of CQRS where a service only
-      exposes query operations and maintains its database by subscribing to events
-      from other services (e.g., `OrderHistoryService`).
+    - **Query-Only Services:** A specific application of CQRS where a service
+      only exposes query operations and maintains its database by subscribing to
+      events from other services (e.g., `OrderHistoryService`).
   - **Benefits of CQRS:**
     - **Efficient implementation of diverse and complex queries**
       (multi-service, specialized DBs).
