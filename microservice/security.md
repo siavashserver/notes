@@ -1327,6 +1327,8 @@ The most significant headers relating to CORS include:
 CORS is not, itself, a comprehensive security feature but rather a tool to
 define safe and intentional cross-origin interactions.
 
+> CORS protects who can **read** your responses
+
 ### Practical Application in Angular and ASP.NET
 
 #### Angular Frontend
@@ -1525,6 +1527,8 @@ cross-origin "side channel" attacks** (like XS-Leaks, Spectre, or Meltdown),
 which exploit the way browsers fetch and render resources used in elements such
 as `<script>`, `<img>`, or `<iframe>`.
 
+> CORP protects who can **embed** your resources
+
 **Header values:**
 
 - `same-origin`: Only same-origin resource requests are allowed.
@@ -1583,6 +1587,8 @@ execution, enforcing-origin integrity.
 A CSP is delivered via the `Content-Security-Policy` header. The syntax consists
 of directives specifying permitted sources for each resource type.
 
+> CSP protects what your page can **load**
+
 **Example policy:**
 
 ```
@@ -1610,6 +1616,22 @@ Content-Security-Policy:
 ### Practical Application
 
 #### ASP.NET Backend
+
+The **Content-Security-Policy (CSP)** header should be applied to **all HTTP
+responses that render HTML**—because CSP is evaluated by the browser when it
+parses and loads a page.
+
+That means:
+
+- ✅ **Razor Pages / MVC Views / Blazor Pages** → Always set CSP here, since they
+  produce HTML that loads scripts, styles, images, etc.
+- ✅ **API endpoints returning HTML** (rare, but possible) → Should also include
+  CSP.
+- ❌ **Static assets (CSS, JS, images, fonts, JSON, etc.)** → Do **not** need CSP
+  headers. They are _consumed_ under the CSP defined by the HTML page, not
+  evaluated independently.
+- ❌ **API endpoints returning JSON/XML** → No CSP needed, since browsers don’t
+  execute them as documents.
 
 ##### Setting CSP Header in Middleware
 
@@ -2025,6 +2047,14 @@ impersonate a user until the token expires—or longer, if able to refresh.
 - Set the **Secure** flag (only sent over HTTPS).
 - Set **SameSite=Lax or Strict** to restrict cross-site usage (mitigates CSRF).
 
+**SameSite Options:**
+
+| Mode       | Behavior                                                                                                                                                             | Typical Use Case                                                                                         |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| **Strict** | Cookie is **never sent** with cross-site requests (even when a user clicks a link from another site). Only sent when navigating within the same site.                | High-security contexts (e.g., online banking) where CSRF protection is more important than convenience.  |
+| **Lax**    | Cookie is sent on **same-site requests** and on **top-level, safe cross-site navigations** (like clicking a link with `GET`). Not sent for iframes or POST requests. | Balanced security and usability (e.g., login sessions that should persist when users arrive via a link). |
+| **None**   | Cookie is sent in **all contexts**, including cross-site requests. Must also be marked `Secure` (HTTPS only).                                                        | Required for third-party use cases (e.g., embedded widgets, cross-site SSO, ad networks).                |
+
 Pros:
 
 - Protected from XSS.
@@ -2179,13 +2209,6 @@ Think of it as:
 | 8   | Software & Data Integrity Failures       | Using unsigned packages           | Verify signatures, integrity checks    |
 | 9   | Security Logging & Monitoring Failures   | No alerts on brute force          | Central logging, anomaly alerts        |
 | 10  | Server-Side Request Forgery (SSRF)       | App fetches internal AWS metadata | Whitelist outbound requests            |
-
-Perfect! Let’s go **deep dive OWASP Top 10 (2021)** tailored for your
-\*\*Angular
-
-- ASP.NET Core + EF Core stack**, with realistic scenarios, triggers, mitigation
-  code, and interview Q\&A. I’ll go **one by one\*\* to make it digestible and
-  actionable.
 
 ### Broken Access Control (A01)
 
@@ -2526,3 +2549,564 @@ if (!allowedHosts.Contains(uri.Host))
 | **A08** | Software & Data Integrity Failures       | Unsigned JS/CDN scripts → MITM injection                 | Use signed packages, Subresource Integrity (SRI)                  | `<script src="lib.js" integrity="sha384-..." crossorigin="anonymous"></script>`                       | Q: Ensure third-party packages are safe?<br>A: Signed packages, checksum verification, SRI for client scripts           |
 | **A09** | Security Logging & Monitoring Failures   | No logs for failed login attempts                        | Centralized logging, alerting                                     | **Serilog:** `Log.Information("Failed login for {User}", userId)`                                     | Q: Why logging important?<br>A: Detect attacks early, support incident response                                         |
 | **A10** | Server-Side Request Forgery (SSRF)       | User input URL fetches internal metadata                 | Validate URLs, whitelist hosts, avoid fetching internal resources | `if(!allowedHosts.Contains(uri.Host)) return BadRequest();`                                           | Q: Prevent SSRF?<br>A: Whitelist, validate URLs, avoid internal resource fetch from user input                          |
+
+---
+
+## CHEAT SHEET 1: Common Web Security Attacks
+
+| Attack Type        | How It Works                                   | Key Mitigation Strategies                      |
+| ------------------ | ---------------------------------------------- | ---------------------------------------------- |
+| SQL Injection      | Injecting SQL through user input               | Prepared statements, input validation          |
+| XSS                | Inserting JS into pages viewed by others       | Output encoding, CSP, input sanitization       |
+| CSRF               | Forcing user’s browser to submit requests      | CSRF tokens, SameSite cookies, referrer checks |
+| Broken Auth        | Exploiting auth/session handling flaws         | MFA, session management, brute-force defenses  |
+| IDOR               | Direct access to internal objects via input    | Access checks, indirect references             |
+| RCE                | Remote code execution via input or unsafe code | Input validation, patching, least privilege    |
+| Dir Traversal      | Accessing files outside intended dirs          | Sanitize paths, restrict permissions           |
+| SSRF               | Server makes malicious requests                | Whitelisting, input validation, segmentation   |
+| MITM               | Intercepting and altering traffic              | TLS, certificate pinning, secure configs       |
+| DoS/DDoS           | Overwhelming server/application                | Rate limiting, WAFs, scalable infra            |
+| Insecure Deserial. | Manipulating objects through serialization     | Safe deserialization, signatures, code review  |
+| Misconfiguration   | Poor or default security setup                 | Automation, patching, regular audits           |
+| Known Vulns        | Exploiting old/buggy components                | Inventory, updates, SCA tools                  |
+
+### 1. SQL Injection Attack
+
+#### How It Works
+
+- **SQL Injection** occurs when user input is improperly sanitized, allowing an
+  attacker to inject malicious SQL queries into a database. This enables
+  attackers to access, modify, or delete sensitive data, bypass authentication,
+  or execute administrative operations on databases.
+- Common attack vectors include form fields, URL parameters, and HTTP headers.
+  If inputs are directly concatenated into SQL statements without validation,
+  attackers can manipulate queries to extract information or escalate
+  privileges.
+
+#### Mitigation Strategies
+
+- **Prepare Statements/Parameterized Queries**: Always use prepared statements
+  with parameterized queries to ensure user input is treated as data and not
+  executable code.
+- **Input Validation and Escaping**: Validate user input for type, length,
+  format, and range. Use proper escaping for database queries.
+- **Least Privilege Principle**: Restrict database accounts to only essential
+  privileges.
+- **Web Application Firewalls (WAFs)**: Deploy WAFs to detect and block common
+  SQLi patterns.
+- **Error Handling**: Avoid displaying detailed database errors to users, as
+  these can provide attackers additional information.
+
+---
+
+### 2. Cross-Site Scripting (XSS) Attack
+
+#### How It Works
+
+- **XSS** allows attackers to inject malicious JavaScript or HTML into web pages
+  viewed by users. There are three main types:
+  - **Stored XSS**: Malicious script is persisted on the server (database,
+    comments) and served to users.
+  - **Reflected XSS**: Malicious script comes from a request (e.g., URL
+    parameter) and is reflected by the server.
+  - **DOM-based XSS**: The vulnerability is in client-side code, which
+    dynamically updates the DOM with unsanitized user input.
+
+#### Mitigation Strategies
+
+- **Output Encoding/Escaping**: Encode user input before rendering it to the
+  browser (e.g., HTML, JavaScript, URL encoding).
+- **Content Security Policy (CSP)**: Implement CSP headers to restrict resource
+  loading and script execution.
+- **Sanitize Inputs**: Use well-vetted libraries to sanitize input data.
+- **HTTP-only Cookies**: Use HTTP-only and Secure attributes on cookies to
+  prevent theft via JavaScript.
+- **Framework Security Features**: Leverage built-in security features in web
+  frameworks that reduce XSS risk.
+
+---
+
+### 3. Cross-Site Request Forgery (CSRF) Attack
+
+#### How It Works
+
+- **CSRF** tricks an authenticated user’s browser into submitting a request to a
+  web app without consent, leveraging existing cookies or authentication
+  sessions.
+- Typical scenario: The user is logged in to Bank.com and visits a malicious
+  page; that page submits requests on the user’s behalf to perform unwanted
+  actions, such as transferring funds.
+
+#### Mitigation Strategies
+
+- **CSRF Tokens**: Include unique and unpredictable tokens with every sensitive
+  transaction/request.
+- **SameSite Cookies**: Use the `SameSite` attribute to prevent cookies from
+  being sent with cross-origin requests.
+- **User Interaction Verification**: Require re-authentication or multi-factor
+  authentication for critical actions.
+- **Check Referer Header**: Validate that requests come from legitimate sources.
+- **Avoid GET for Sensitive Actions**: Use POST (not GET) for state-changing
+  operations.
+
+---
+
+### 4. Broken Authentication Attack
+
+#### How It Works
+
+- Attackers exploit weaknesses in authentication mechanisms to gain unauthorized
+  access. Techniques include brute force attacks, credential stuffing, session
+  fixation, and exploiting weak password policies.
+- Poor session handling (e.g., predictable session IDs, session IDs in URLs) or
+  logic errors can enable attackers to impersonate users or escalate privileges.
+
+#### Mitigation Strategies
+
+- **Multi-Factor Authentication (MFA)**: Require additional authentication
+  steps.
+- **Secure Password Storage**: Use strong hashing algorithms (bcrypt, Argon2)
+  with salts for password storage.
+- **Session Management**: Use secure, random session IDs, invalidate old
+  sessions on login/logout, and set session timeouts.
+- **Account Lockout**: Temporarily disable accounts after repeated failed login
+  attempts to mitigate brute-force attacks.
+- **Secure Transmission**: Always use HTTPS to protect credentials in transit.
+
+---
+
+### 5. Insecure Direct Object References (IDOR)
+
+#### How It Works
+
+- **IDOR** arises when applications expose internal objects (such as files,
+  database records) via user-supplied input without enforcing proper access
+  controls.
+- Example: URLs like `/profile?user=123` permit unauthorized access if users
+  change IDs, granting them access to others’ data.
+
+#### Mitigation Strategies
+
+- **Access Control Checks**: Server-side checks to confirm user permissions for
+  referenced objects.
+- **Use Indirect References**: Employ random or hashed tokens instead of
+  predictable object IDs.
+- **Least Privilege Principle**: Minimize exposure of object identifiers to
+  users.
+- **Logging and Monitoring**: Alert on suspicious access patterns indicative of
+  enumeration attacks.
+
+---
+
+### 6. Remote Code Execution (RCE) Attack
+
+#### How It Works
+
+- **RCE vulnerabilities** let attackers execute arbitrary code on a server,
+  typically through injection flaws, unsafe deserialization, or unsafe file
+  uploads. Exploited servers may install malware, compromise data, or facilitate
+  lateral movement within networks.
+- RCE can be the result of other vulnerabilities, such as deserialization or
+  file upload flaws.
+
+#### Mitigation Strategies
+
+- **Input Validation**: Never directly execute or interpret user input.
+- **Least Privilege Execution**: Run server processes with minimal privileges.
+- **Patch Management**: Regularly update and patch systems and dependencies.
+- **Code Reviews/Audits**: Review source for commands or eval statements
+  handling untrusted inputs.
+- **Isolation**: Use containers or sandboxes to limit the impact of a successful
+  exploit.
+
+---
+
+### 7. Directory Traversal Attack
+
+#### How It Works
+
+- **Directory Traversal** (path traversal) exploits insufficient validation of
+  file or directory paths, allowing access to files outside of intended
+  directories. Attackers submit crafted file paths like `../../etc/passwd` to
+  access sensitive files.
+- Used in file download/upload features or log viewers.
+
+#### Mitigation Strategies
+
+- **Input Sanitization**: Restrict file paths to alphanumeric characters,
+  whitelist allowed items, and remove traversal (‘../’) sequences.
+- **Fixed Path Usage**: Prepend/append static directories to file paths on the
+  backend.
+- **Filesystem Permissions**: Limit server access to only necessary files, using
+  containerization or chroot jails.
+- **Restriction of File Downloads**: Prohibit access to system directories and
+  critical configuration files.
+
+---
+
+### 8. Server-Side Request Forgery (SSRF) Attack
+
+#### How It Works
+
+- **SSRF** leverages a vulnerable server to make unauthorized internal or
+  external HTTP requests. An attacker may use SSRF to access internal resources,
+  metadata services, or other network-restricted services.
+- Often occurs where an app takes a URL as input and fetches remote data, such
+  as image fetchers or webhooks.
+
+#### Mitigation Strategies
+
+- **Whitelist Domains**: Only allow requests to explicitly approved domains/IPs.
+- **URL/Parameter Validation**: Validate and sanitize all untrusted input used
+  in requests.
+- **Network Segmentation**: Place critical systems on separate networks with
+  strict firewall rules.
+- **Disable Unnecessary Protocols**: Restrict the allowed protocols (e.g., block
+  file://, gopher://, etc.).
+- **Metadata API Hardening**: Block server access to sensitive metadata
+  endpoints.
+
+---
+
+### 9. Man-in-the-Middle (MITM) Attack
+
+#### How It Works
+
+- In **MITM** attacks, attackers secretly intercept and possibly alter the
+  communication between two parties. They can steal credentials, hijack
+  sessions, or manipulate data.
+- Techniques include rogue WiFi hotspots, DNS spoofing, and SSL stripping. MITM
+  is especially dangerous on insecure public networks.
+
+#### Mitigation Strategies
+
+- **Transport Layer Security (TLS)**: Encrypt all traffic with strong protocols
+  (HTTPS).
+- **Certificate Pinning**: Ensure the client only accepts trusted certificates.
+- **Strong Authentication**: Use MFA to reduce impact of stolen credentials.
+- **Avoid Insecure Protocols**: Disable plain HTTP, FTP, and Telnet.
+- **Monitor Networks**: Use network security monitoring to detect interception
+  attempts.
+
+---
+
+### 10. Denial of Service (DoS) and Distributed Denial of Service (DDoS) Attacks
+
+#### How It Works
+
+- **DoS and DDoS** attacks aim to overwhelm a target server or network with
+  traffic or resource requests, rendering it unavailable to legitimate users.
+  DDoS is distributed via a botnet or multiple computers coordinating the
+  attack.
+- Methods include SYN floods, UDP floods, amplification, and application-layer
+  attacks.
+
+#### Mitigation Strategies
+
+- **Rate Limiting and Throttling**: Limit the number of requests accepted over a
+  period.
+- **Web Application Firewalls**: Use WAFs to filter malicious requests.
+- **Traffic Filtering**: Employ upstream traffic filtering or Content Delivery
+  Networks (CDNs) that absorb and mitigate surges.
+- **Scalable Infrastructure**: Use cloud-based, scalable solutions to absorb
+  excess traffic.
+- **Incident Response Plan**: Prepare a plan for detecting and responding to DoS
+  events.
+
+---
+
+### 11. Insecure Deserialization Attack
+
+#### How It Works
+
+- In **insecure deserialization**, untrusted data is used to reconstruct
+  objects, often resulting in code execution, data tampering, authentication
+  bypass, or privilege escalation. Attackers change serialized data to inject
+  malicious code or manipulate logic.
+- Popular in Java, .NET, and PHP environments where object serialization is
+  common.
+
+#### Mitigation Strategies
+
+- **Do Not Accept Untrusted Objects**: Avoid accepting serialized objects from
+  untrusted sources.
+- **Integrity Signatures**: Sign serialized data or use cryptographic hashes to
+  detect tampering.
+- **Deserialization Safeguards**: Use safe deserialization libraries or
+  whitelisting of permitted object types.
+- **Code Reviews**: Review all uses of serialization/deserialization for risk.
+- **Monitor and Alert**: Detect suspicious deserialization attempts in logs.
+
+---
+
+### 12. Security Misconfiguration
+
+#### How It Works
+
+- This occurs when systems, frameworks, or applications are not securely
+  configured. Causes include default credentials, open cloud storage, verbose
+  error messages, unnecessary services running, or out-of-date software.
+- Attackers exploit these lapses to access sensitive data, escalate privileges,
+  or pivot into networks.
+
+#### Mitigation Strategies
+
+- **Automated Configuration Management**: Use automation tools to enforce secure
+  settings.
+- **Remove Unnecessary Services**: Disable unused features and accounts.
+- **Harden Default Installations**: Change defaults and apply least privilege.
+- **Patch Systems**: Regularly update software and dependencies.
+- **Regular Reviews/Audits**: Periodic security audits to detect and fix
+  misconfigurations.
+
+---
+
+### 13. Using Components with Known Vulnerabilities
+
+#### How It Works
+
+- **Libraries, frameworks, and plugins** are reused in modern apps. If any
+  component has a known vulnerability, attackers can exploit it to compromise
+  the app, lead to RCE, or data leaks.
+- Component management becomes challenging as software ecosystems and
+  dependencies grow rapidly.
+
+#### Mitigation Strategies
+
+- **Component Inventory**: Maintain an updated list of all used components.
+- **Regular Patch Management**: Apply security updates quickly.
+- **Vulnerability Scanning**: Use SCA tools (Software Composition Analysis) to
+  detect vulnerabilities.
+- **Retire Deprecated Components**: Remove unused or unsupported libraries.
+- **Vendor Security Policies**: Evaluate security practices of third-party
+  suppliers.
+
+---
+
+## CHEAT SHEET 2: OWASP Top 10 Security Risks
+
+| OWASP Risk                  | Description                           | Key Mitigation Strategies                            |
+| --------------------------- | ------------------------------------- | ---------------------------------------------------- |
+| Broken Access Control       | Access controls not properly enforced | Server-side checks, least privilege, deny by default |
+| Cryptographic Failures      | Weak/missing encryption               | Strong crypto, TLS, key management                   |
+| Injection                   | Data sent to interpreters unsanitized | Prepared queries, input validation, escape input     |
+| Insecure Design             | Weak design/lack of security controls | Threat modeling, secure SDLC, design patterns        |
+| Security Misconfiguration   | Poor config/default/insecure settings | Automation, audits, least functionality              |
+| Vulnerable Components       | Old/unpatched/buggy 3rd-party parts   | Inventory, updates, SCA tools                        |
+| ID & Auth Failures          | Auth/session flaws, bypass, weak MFA  | Strong auth/session mgmt, frameworks, monitoring     |
+| Data Integrity Failures     | Trusted data/updates not verified     | Signing, checksums, safe deserialization             |
+| Logging/Monitoring Failures | Lack of logging/monitoring            | Log sensitive events, centralize, alerting           |
+| SSRF                        | Server abused to fetch resources      | Input validation, whitelisting, network segmentation |
+
+### **A01:2021 – Broken Access Control**
+
+#### How It Works
+
+- Applications fail to enforce proper restrictions on authenticated users,
+  letting attackers act as unauthorized users or escalate privileges.
+- Examples include URL manipulation to access others’ data, forced browsing, and
+  bypassing UI controls to access APIs.
+
+#### Mitigation Strategies
+
+- **Deny by Default**: No access unless explicitly granted.
+- **Server-Side Checks**: Validate authorization on all sensitive actions on the
+  server side.
+- **Least Privilege**: Users and processes get the minimal necessary
+  permissions.
+- **Use Proven Frameworks**: Employ frameworks or libraries for access control
+  management.
+- **Review Logs**: Monitor and audit access to sensitive functionality.
+
+---
+
+### **A02:2021 – Cryptographic Failures**
+
+(Formerly “Sensitive Data Exposure”)
+
+#### How It Works
+
+- Exposure of sensitive information via weak/no encryption, poor key management,
+  or misconfigured protocols.
+- Common flaws: transmitting sensitive data over HTTP, not encrypting data at
+  rest, and using outdated cryptographic algorithms.
+
+#### Mitigation Strategies
+
+- **Encrypt Sensitive Data**: In transit (TLS 1.2+) and at rest.
+- **Avoid Weak Algorithms**: Use strong, up-to-date cryptography libraries.
+- **Key Management**: Rotate and manage encryption keys securely.
+- **Don’t Store Unneeded Data**: Especially sensitive information like payment
+  details.
+- **Set Proper Headers**: Enforce secure transport (HSTS) and other security
+  headers.
+
+---
+
+### **A03:2021 – Injection**
+
+#### How It Works
+
+- Untrusted input is sent to interpreters (SQL, NoSQL, LDAP, OS, etc.), allowing
+  malicious commands to execute.
+- Examples: SQL injection, command injection, NoSQL injection, and LDAP
+  injection.
+
+#### Mitigation Strategies
+
+- **Parameterized Queries**: Use ORM or parameterized APIs for database access.
+- **Input Validation and Sanitization**: Whitelist where possible.
+- **Escape Data**: Intrinsically dangerous characters should be neutralized.
+- **Least Privilege Database Accounts**: Limit database user rights.
+- **Automated Detection**: Employ static and dynamic code analysis tools.
+
+---
+
+### **A04:2021 – Insecure Design**
+
+(New in 2021)
+
+#### How It Works
+
+- Inadequate security controls due to missing security requirements or unsecure
+  design patterns. This risk is about anticipating threats and embedding secure
+  design, not just fixing bugs.
+
+#### Mitigation Strategies
+
+- **Threat Modeling**: Proactively identify threats and required controls during
+  the design phase.
+- **Secure Development Lifecycle**: Embed security into SDLC.
+- **Secure Design Patterns**: Follow vetted architecture frameworks and
+  controls.
+- **Security Training**: Regular training for developers/architects on secure
+  design patterns.
+
+---
+
+### **A05:2021 – Security Misconfiguration**
+
+#### How It Works
+
+- Default, incomplete, or ad-hoc configurations that leave the system open to
+  attacks. Examples: insecure cloud storage, default admin accounts, verbose
+  errors, or enabling unnecessary services.
+
+#### Mitigation Strategies
+
+- **Automate Configuration**: Version-controlled automated deployment.
+- **Principle of Least Functionality**: Disable unnecessary features, services,
+  and ports.
+- **Security Hardening**: Harden infrastructure and frameworks.
+- **Continuous Auditing**: Regular scans and config reviews.
+- **Error Handling**: Restrict error details in applications; only log detailed
+  errors internally.
+
+---
+
+### **A06:2021 – Vulnerable and Outdated Components**
+
+(Formerly “Using Components with Known Vulnerabilities”)
+
+#### How It Works
+
+- Use of outdated or unsupported libraries, frameworks, or operating systems
+  that have known security weaknesses. Attackers exploit these for RCE, data
+  exfiltration, or system compromise.
+
+#### Mitigation Strategies
+
+- **Maintain Inventory**: List all third-party components and their versions.
+- **Monitor for Updates**: Subscribe to security advisories.
+- **Automated Dependency Checking**: Use dependency management/scanning tools.
+- **Remove Unused Components**: Eliminate unnecessary software to reduce risk.
+- **Test After Updates**: Confirm updates don’t break core functionality.
+
+---
+
+### **A07:2021 – Identification and Authentication Failures**
+
+(Formerly “Broken Authentication”)
+
+#### How It Works
+
+- Failures to enforce proper authentication and session management. Issues
+  include weak passwords, improper implementation of JWT/OAuth, session ID
+  exposure, and bypassing login mechanisms.
+
+#### Mitigation Strategies
+
+- **MFA**: Require multi-factor authentication.
+- **Password Policies**: Enforce strong, regularly rotated passwords.
+- **Session Management**: Use secure and random session tokens with expiration.
+- **Framework Controls**: Use authentication features from reputable frameworks.
+- **Monitor for Attacks**: Detect brute-force, credential stuffing, and session
+  hijacking attempts.
+
+---
+
+### **A08:2021 – Software and Data Integrity Failures**
+
+(Expands “Insecure Deserialization”)
+
+#### How It Works
+
+- Trusting unverified software updates, plugins, or data can allow adversaries
+  to compromise the application. Includes insecure deserialization, update
+  mechanisms lacking integrity checks, or using repositories without proper
+  access control.
+
+#### Mitigation Strategies
+
+- **Digital Signatures/Checksums**: Always verify updates and serialized data.
+- **Code Signing**: Ensure all code and third-party libraries are signed.
+- **Safe Deserialization**: Avoid deserializing untrusted data, or use
+  serialization libraries with strict type controls.
+- **Dependency Management**: Only use trusted, verified sources for libraries.
+- **Access Control**: Restrict update mechanisms to privileged users.
+
+---
+
+### **A09:2021 – Security Logging and Monitoring Failures**
+
+(Formerly “Insufficient Logging and Monitoring”)
+
+#### How It Works
+
+- Lack of logs or monitoring for suspicious activity leads to delayed detection
+  of breaches and inability to respond to incidents or forensics. Examples
+  include missing logs for authentication failure, admin activity, sensitive
+  data access, or not alerting on suspicious events.
+
+#### Mitigation Strategies
+
+- **Application and Infrastructure Logging**: Log security-relevant events
+  (access control failures, input validation failures, etc.).
+- **Centralized Log Management**: Aggregate logs securely.
+- **Continuous Monitoring**: Integrate with SIEM for real-time alerts.
+- **Retain Logs Securely**: Keep logs tamper-resistant and maintain audit
+  trails.
+- **Test Detection**: Periodically test alerting and incident response
+  mechanisms.
+
+---
+
+### **A10:2021 – Server-Side Request Forgery (SSRF)**
+
+(New in 2021)
+
+#### How It Works
+
+- SSRF issues let attackers abuse functionality that fetches remote resources,
+  tricking the server into making unauthorized requests. Potential for accessing
+  internal networks, cloud metadata, or sensitive endpoints.
+
+#### Mitigation Strategies
+
+- **Whitelisting**: Only allow access to trusted, needed destinations.
+- **Sanitize Inputs**: Strongly validate user-provided URLs or IP addresses.
+- **Firewalls/Segmentation**: Prevent outbound connections to internal networks
+  and restrict server access to metadata endpoints.
+- **Disable Unnecessary Protocols**: Block non-essential URL schemes.
+- **Regular Penetration Testing**: Identify and remediate SSRF vulnerabilities
+  proactively.
