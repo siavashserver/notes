@@ -3110,3 +3110,40 @@ if (!allowedHosts.Contains(uri.Host))
 - **Disable Unnecessary Protocols**: Block non-essential URL schemes.
 - **Regular Penetration Testing**: Identify and remediate SSRF vulnerabilities
   proactively.
+
+---
+
+## WAF (Web Application Firewall)
+
+A **WAF (Web Application Firewall)** is a security layer designed specifically
+to protect **web applications** (sites, APIs, services) from common attacks like
+**SQL Injection, XSS, CSRF, file inclusion, and malicious bots**. Think of it as
+a **shield between the internet and your app**.
+
+### 🔎 What is a WAF?
+
+- A **reverse proxy** that sits in front of your web application.
+- It inspects **HTTP/HTTPS traffic** (Layer 7 of the OSI model) before it
+  reaches your backend.
+- Uses **rules/policies** to detect and block malicious requests.
+
+### How does it work?
+
+1. **Traffic Interception**
+
+   - All client requests go through the WAF before reaching your app.
+   - The WAF analyzes headers, query strings, cookies, and request bodies.
+
+2. **Filtering & Detection**
+
+   - **Negative Security Model (Blacklist):** Blocks known malicious patterns
+     (e.g., `UNION SELECT` in SQL).
+   - **Positive Security Model (Whitelist):** Only allows explicitly defined
+     safe requests.
+   - **Hybrid/AI-based:** Uses signatures + anomaly detection + machine
+     learning.
+
+3. **Action**
+   - If a request matches a malicious pattern → **blocked or challenged** (e.g.,
+     CAPTCHA).
+   - If safe → forwarded to your backend.
