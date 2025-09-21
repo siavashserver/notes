@@ -2156,6 +2156,144 @@ Use with caution—may loop endlessly if error source isn't resolved.
 
 ---
 
+## ngx-mfe
+
+`ngx-mfe` is designed to make Angular microfrontends more flexible than plain
+Module Federation by letting you drop MFEs directly into templates and pass data
+back and forth.
+
+- Use `inputs: {}` to pass data **into** the MFE.
+- Use `outputs: {}` to subscribe to events **from** the MFE.
+- `remoteEntryUrl` points to the remote’s `remoteEntry.js`.
+- `mfeOutletModule` is required if the component depends on a module (omit it
+  for standalone components).
+
+### Setup Recap
+
+- Install `ngx-mfe` in your host app:
+
+```bash
+npm install ngx-mfe
+```
+
+- Configure your **remote** app with `ModuleFederationPlugin` to expose
+  components/modules:
+
+```ts
+// webpack.config.js in remote app
+new ModuleFederationPlugin({
+  name: "profileMfe",
+  filename: "remoteEntry.js",
+  exposes: {
+    "./ProfileModule": "./src/app/profile/profile.module.ts",
+    "./ProfileComponent": "./src/app/profile/profile.component.ts",
+  },
+  shared: {
+    "@angular/core": { singleton: true },
+    "@angular/common": { singleton: true },
+  },
+});
+```
+
+### Sending Data
+
+In your **remote component** (`ProfileComponent`):
+
+```ts
+// profile.component.ts (remote)
+import { Component, Input } from "@angular/core";
+
+@Component({
+  selector: "app-profile",
+  template: `
+    <h3>User Profile</h3>
+    <p>Name: {{ user?.name }}</p>
+    <p>Email: {{ user?.email }}</p>
+  `,
+})
+export class ProfileComponent {
+  @Input() user: { name: string; email: string } | null = null;
+}
+```
+
+In your **host app template**:
+
+```html
+<!-- host.component.html -->
+<ng-container
+  *mfeOutlet="'profileMfe/ProfileComponent'; 
+                          remoteEntryUrl: 'http://localhost:4201/remoteEntry.js'; 
+                          mfeOutletModule: 'ProfileModule'; 
+                          inputs: { user: currentUser }"
+>
+</ng-container>
+```
+
+In your **host component TS**:
+
+```ts
+// host.component.ts
+@Component({
+  selector: "app-host",
+  templateUrl: "./host.component.html",
+})
+export class HostComponent {
+  currentUser = { name: "david", email: "david@example.com" };
+}
+```
+
+### Receiving Data
+
+In your **remote component** (`ProfileComponent`):
+
+```ts
+// profile.component.ts (remote)
+import { Component, Output, EventEmitter } from "@angular/core";
+
+@Component({
+  selector: "app-profile",
+  template: ` <button (click)="notify()">Send Data Back</button> `,
+})
+export class ProfileComponent {
+  @Output() profileUpdated = new EventEmitter<string>();
+
+  notify() {
+    this.profileUpdated.emit("Profile updated at " + new Date().toISOString());
+  }
+}
+```
+
+In your **host template**:
+
+```html
+<!-- host.component.html -->
+<ng-container
+  *mfeOutlet="'profileMfe/ProfileComponent'; 
+                          remoteEntryUrl: 'http://localhost:4201/remoteEntry.js'; 
+                          mfeOutletModule: 'ProfileModule'; 
+                          outputs: { profileUpdated: onProfileUpdated }"
+>
+</ng-container>
+```
+
+In your **host component TS**:
+
+```ts
+// host.component.ts
+@Component({
+  selector: "app-host",
+  templateUrl: "./host.component.html",
+})
+export class HostComponent {
+  onProfileUpdated(message: string) {
+    console.log("Received from MFE:", message);
+    alert(message);
+  }
+}
+```
+
+---
+
 ## Interview Questions
 
 ### What is the role of `NgZone` in Angular, and when would you opt out of Angular's change detection?
