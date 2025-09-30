@@ -2,6 +2,469 @@
 title: Entity Framework
 ---
 
+# How to apply a query filter
+
+Global query filters are expressions attached to an entity type in
+`OnModelCreating`. useful for soft-delete, multi-tenant, user scoping, etc. You
+can disable them per-query with `IgnoreQueryFilters()`.
+
+```csharp
+public class Product
+{
+    public int Id { get; set; }
+    public bool IsDeleted { get; set; }
+    public int TenantId { get; set; }
+}
+
+public class AppDbContext : DbContext
+{
+    private readonly int _tenantId;
+    public DbSet<Product> Products => Set<Product>();
+
+    public AppDbContext(DbContextOptions options, IHttpContextAccessor http) : base(options)
+    {
+        _tenantId = /* resolve tenant id from http context */;
+    }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Product>()
+            .HasQueryFilter(p => !p.IsDeleted && p.TenantId == _tenantId);
+    }
+}
+
+// usage: disable filter for a special query
+var all = await ctx.Products.IgnoreQueryFilters().ToListAsync();
+```
+
+---
+
+# Role of `DbContextPool`
+
+`AddDbContextPool<TContext>()` reuses `DbContext` instances from a pool to
+reduce allocation/initialization cost on high-throughput apps. Pooled contexts
+are _recycled_ so you must not store per-request state inside the context (or
+you must reset it). Pooling does **not** make `DbContext` thread-safe — still
+one context instance per logical request flow.
+
+```csharp
+// Startup / Program.cs
+builder.Services.AddDbContextPool<AppDbContext>(options =>
+    options.UseSqlServer(configuration.GetConnectionString("Default")));
+
+// If you need to run background work that requires a fresh context,
+// request a scoped factory: IDbContextFactory<AppDbContext>
+```
+
+---
+
+# All supported database inheritance modes (EF Core)
+
+EF Core supports the common ORM inheritance strategies:
+
+1. **TPH — Table Per Hierarchy (default)** One table containing all properties +
+   `Discriminator` column.
+
+```csharp
+// default: no config required; you can control discriminator:
+modelBuilder.Entity<Animal>()
+    .HasDiscriminator<string>("AnimalType")
+    .HasValue<Cat>("Cat")
+    .HasValue<Dog>("Dog");
+```
+
+2. **TPT — Table Per Type (EF Core 5+)** Separate table for base and each
+   derived type (joins at query time).
+
+```csharp
+modelBuilder.Entity<Animal>().ToTable("Animals");
+modelBuilder.Entity<Cat>().ToTable("Cats");   // Cat columns store Cat-specific fields
+modelBuilder.Entity<Dog>().ToTable("Dogs");
+```
+
+3. **TPC — Table Per Concrete type (EF Core 7+)** Each concrete type gets its
+   own table with all properties (no shared base table). Configure via
+   `UseTpcMappingStrategy()` and `ToTable()`.
+
+```csharp
+modelBuilder.Entity<Animal>().UseTpcMappingStrategy();
+modelBuilder.Entity<Cat>().ToTable("Cats");
+modelBuilder.Entity<Dog>().ToTable("Dogs");
+```
+
+Short tradeoffs: TPH = simplest & fastest for many reads (but sparse columns +
+discriminator), TPT = normalized but can be slower (joins), TPC = separate
+tables per concrete type (UNIONs when querying base) — use per scenario.
+
+---
+
+# ChangeTracker, `AsNoTracking`, detaching & attaching entities
+
+**ChangeTracker overview (what it does):** `DbContext` keeps entity instances in
+the change tracker; tracked entities’ state changes are detected and persisted
+by `SaveChanges()`. ([Microsoft Learn][4])
+
+**AsNoTracking** — use for read-only queries to avoid tracking overhead:
+
+```csharp
+var readOnly = await ctx.Products
+                      .AsNoTracking()
+                      .Where(p => p.Price > 10)
+                      .ToListAsync();
+```
+
+(also `AsNoTrackingWithIdentityResolution()` if you want reference identity
+without full change tracking).
+
+**How to stop tracking an already tracked item**
+
+- Detach a single entity:
+
+```csharp
+ctx.Entry(entity).State = EntityState.Detached;
+```
+
+- Clear all tracked entities (EF Core provides an efficient API):
+
+```csharp
+ctx.ChangeTracker.Clear();   // clears the tracker (preferred over detaching repeatedly)
+```
+
+(Use `Clear()` instead of detaching many entities manually for performance).
+
+**How to start tracking an untracked item**
+
+- `Attach` — put entity into `Unchanged` (no DB changes will be sent unless you
+  change state):
+
+```csharp
+ctx.Attach(entity);                 // now tracked as Unchanged
+```
+
+- `Update` — attach and mark as `Modified` (will be saved):
+
+```csharp
+ctx.Update(entity);                 // tracked as Modified
+// or:
+ctx.Entry(entity).State = EntityState.Modified;
+```
+
+Use `Attach` when you want to bring an entity into the context without
+persisting changes automatically; `Update` when you know it should be written.
+
+---
+
+# Available interceptors
+
+EF Core exposes interceptor extensibility. Common interceptor types (concrete
+base classes to inherit from):
+
+- `DbCommandInterceptor` / `IDbCommandInterceptor` — intercept & modify SQL
+  commands.
+- `DbConnectionInterceptor` / `IDbConnectionInterceptor` — connection
+  open/closing events.
+- `DbTransactionInterceptor` / `IDbTransactionInterceptor` — transaction
+  begin/commit/rollback.
+- `SaveChangesInterceptor` / `ISaveChangesInterceptor` — before/after
+  `SaveChanges` (great for auditing).
+- `IQueryExpressionInterceptor` / query translation hooks (for advanced query
+  expression interception).
+- There are also interceptors for diagnostics around queries, readers, etc. (all
+  implement `IInterceptor`).
+
+Example: simple `SaveChangesInterceptor` that sets audit fields:
+
+```csharp
+public class AuditInterceptor : SaveChangesInterceptor
+{
+    public override InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)
+    {
+        var ctx = eventData.Context;
+        if (ctx == null) return base.SavingChanges(eventData, result);
+
+        foreach (var entry in ctx.ChangeTracker.Entries()
+                     .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified))
+        {
+            if (entry.Entity is IAuditable a)
+            {
+                a.UpdatedAt = DateTime.UtcNow;
+                if (entry.State == EntityState.Added) a.CreatedAt = DateTime.UtcNow;
+            }
+        }
+
+        return base.SavingChanges(eventData, result);
+    }
+}
+```
+
+Register interceptors:
+
+```csharp
+// inside DbContextOptionsBuilder configuration
+optionsBuilder.AddInterceptors(new AuditInterceptor(), new MyCommandInterceptor());
+```
+
+---
+
+# Soft Delete Implementation
+
+## 1) Principle
+
+Soft delete = mark rows as deleted (e.g. `IsDeleted = true`, `DeletedAt` set)
+instead of physically removing them. Then use **global query filters** so your
+normal queries ignore deleted rows automatically.
+
+## 2) Minimal model + interface
+
+Create a common interface so you can apply behavior generically:
+
+```csharp
+public interface ISoftDelete
+{
+    bool IsDeleted { get; set; }
+    DateTime? DeletedAt { get; set; }
+    string? DeletedBy { get; set; }
+}
+
+public abstract class EntityBase : ISoftDelete
+{
+    public int Id { get; set; }
+    public bool IsDeleted { get; set; }
+    public DateTime? DeletedAt { get; set; }
+    public string? DeletedBy { get; set; }
+}
+
+public class Product : EntityBase
+{
+    public string Name { get; set; } = null!;
+}
+```
+
+## 3) Global query filter (automatic hiding)
+
+Apply a filter for every entity that implements `ISoftDelete`. This avoids
+writing `.Where(e => !e.IsDeleted)` everywhere:
+
+```csharp
+protected override void OnModelCreating(ModelBuilder modelBuilder)
+{
+    base.OnModelCreating(modelBuilder);
+
+    // apply global query filter for all ISoftDelete entities
+    foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+    {
+        if (typeof(ISoftDelete).IsAssignableFrom(entityType.ClrType))
+        {
+            var method = typeof(DbContextExtensions)
+                .GetMethod(nameof(DbContextExtensions.ApplyIsDeletedQueryFilter),
+                           System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public)!
+                .MakeGenericMethod(entityType.ClrType);
+
+            method.Invoke(null, new object[] { modelBuilder });
+        }
+    }
+}
+```
+
+Add the helper used above:
+
+```csharp
+public static class DbContextExtensions
+{
+    // T must implement ISoftDelete
+    public static void ApplyIsDeletedQueryFilter<TEntity>(ModelBuilder builder)
+        where TEntity : class, ISoftDelete
+    {
+        builder.Entity<TEntity>().HasQueryFilter(e => !e.IsDeleted);
+    }
+}
+```
+
+Now `context.Set<Product>().ToListAsync()` will ignore deleted rows
+automatically.
+
+## 4) Convert deletes to updates (override SaveChanges)
+
+Intercept Delete operations and convert them to setting `IsDeleted = true`:
+
+```csharp
+public override int SaveChanges(bool acceptAllChangesOnSuccess)
+{
+    SoftDeleteInterceptor();
+    return base.SaveChanges(acceptAllChangesOnSuccess);
+}
+
+public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+{
+    SoftDeleteInterceptor();
+    return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+}
+
+private void SoftDeleteInterceptor()
+{
+    var now = DateTime.UtcNow;
+    var entries = ChangeTracker.Entries()
+        .Where(e => e.State == EntityState.Deleted && e.Entity is ISoftDelete);
+
+    foreach (var entry in entries)
+    {
+        var entity = (ISoftDelete)entry.Entity;
+        entity.IsDeleted = true;
+        entity.DeletedAt = now;
+        // optional: set DeletedBy from some service
+        // entity.DeletedBy = currentUser;
+
+        entry.State = EntityState.Modified; // convert delete -> update
+    }
+}
+```
+
+This makes `context.Remove(entity)` soft-delete it. You can also expose a
+`SoftRemove` helper method if you prefer explicit API.
+
+## 5) Alternative: SaveChangesInterceptor (recommended for cleaner separation)
+
+Using `SaveChangesInterceptor` isolates soft-delete logic from `DbContext`:
+
+```csharp
+public class SoftDeleteSaveChangesInterceptor : SaveChangesInterceptor
+{
+    public override InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)
+    {
+        var ctx = eventData.Context;
+        if (ctx == null) return base.SavingChanges(eventData, result);
+
+        var now = DateTime.UtcNow;
+        var entries = ctx.ChangeTracker.Entries()
+            .Where(e => e.State == EntityState.Deleted && e.Entity is ISoftDelete);
+
+        foreach (var entry in entries)
+        {
+            var s = (ISoftDelete)entry.Entity;
+            s.IsDeleted = true;
+            s.DeletedAt = now;
+            entry.State = EntityState.Modified;
+        }
+
+        return base.SavingChanges(eventData, result);
+    }
+}
+```
+
+Register it in options:
+
+```csharp
+optionsBuilder.AddInterceptors(new SoftDeleteSaveChangesInterceptor());
+```
+
+## 6) Querying soft-deleted rows and restoring
+
+- To include deleted rows: use `.IgnoreQueryFilters()`:
+
+```csharp
+var allIncludingDeleted = await ctx.Products.IgnoreQueryFilters().ToListAsync();
+var onlyDeleted = await ctx.Products.IgnoreQueryFilters().Where(p => p.IsDeleted).ToListAsync();
+```
+
+- To restore:
+
+```csharp
+var p = await ctx.Products.IgnoreQueryFilters().FirstAsync(p => p.Id == id);
+p.IsDeleted = false;
+p.DeletedAt = null;
+await ctx.SaveChangesAsync();
+```
+
+## 7) Forcing a real (physical) delete
+
+Sometimes you need to physically remove a row (compliance, purge). You can
+bypass soft-delete logic by:
+
+- A flag on the `DbContext` to disable soft delete behavior temporarily, or
+- Use raw SQL to delete, or
+- Set entity to `EntityState.Deleted` and call `SaveChanges` while interceptor
+  is disabled.
+
+Example flag pattern:
+
+```csharp
+public bool DisableSoftDelete { get; set; } = false;
+
+private void SoftDeleteInterceptor()
+{
+    if (DisableSoftDelete) return;
+    // ... convert deletes to updates ...
+}
+```
+
+Use `using var ctx = new AppDbContext(...){ DisableSoftDelete = true };
+ctx.Remove(entity); ctx.SaveChanges();`
+
+## 8) Indexes & uniqueness considerations
+
+- If you have a unique constraint (e.g. unique product `Code`) you’ll likely
+  need the DB to allow the same value on soft-deleted rows. Options:
+
+  - Use a filtered unique index (SQL Server): `CREATE UNIQUE INDEX
+IX_Product_Code ON Products(Code) WHERE IsDeleted = 0;`
+  - In EF Migrations:
+
+    ```csharp
+    migrationBuilder.CreateIndex(
+        name: "IX_Products_Code_NotDeleted",
+        table: "Products",
+        column: "Code",
+        unique: true,
+        filter: "[IsDeleted] = 0");
+    ```
+
+  - Or include `IsDeleted` in the unique key (less ideal). Filtered unique
+    indexes are the most common solution for SQL Server/Postgres partial
+    indexes.
+
+## 9) Cascade delete & relationships
+
+If an entity A with children B is soft-deleted, EF cascade rules may still
+physically delete children if DB cascade is configured. Recommended:
+
+- Configure relationships as `OnDelete(DeleteBehavior.Restrict)` (or
+  `ClientSetNull`) so you control behavior in application code.
+- Option: implement soft-delete cascade in your interceptor: when parent is
+  soft-deleted, also soft-delete dependent entities (walk ChangeTracker or load
+  children and set `IsDeleted = true`). Be careful with cycles and performance.
+
+## 10) Purging old soft-deleted rows
+
+Soft deletes accumulate data. Implement a scheduled job (background worker) to
+permanently purge rows older than a retention period. Use raw SQL or a bulk
+delete library if high volume.
+
+## 11) Performance & security notes
+
+- Global filters add a small overhead on translation — usually negligible.
+  Indexes on `IsDeleted` are recommended.
+- Soft-deleted rows still consume DB storage and can affect backups/restore
+  times and query plans.
+- Be mindful of security: sensitive data may still be present in soft-deleted
+  rows — if legal/regulatory requirements mandate full erasure, use a physical
+  delete and follow retention policy.
+- Make sure your backups and replication behave as required for soft-deleted
+  data.
+
+## 12) Summary checklist (practical)
+
+- [x] Add `IsDeleted` (and optional `DeletedAt`, `DeletedBy`) to entities (or
+      use interface).
+- [x] Add global query filter(s) to automatically ignore deleted rows.
+- [x] Convert `Delete` operations to `IsDeleted = true` via `SaveChanges`
+      override or `SaveChangesInterceptor`.
+- [x] Provide `IgnoreQueryFilters()` usages for admin/restore scenarios.
+- [x] Add filtered unique indexes or adjust unique constraints.
+- [x] Decide cascade behavior and implement soft-delete cascading if needed.
+- [x] Implement periodic purge job and/or physical-delete path when required.
+
+---
+
 # Transaction Fundamentals in EF Core
 
 At its core, a **database transaction** is a unit of work that is executed in an
