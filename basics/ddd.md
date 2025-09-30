@@ -355,3 +355,218 @@ languages.
 
 No clear boundaries, mixed models, no ubiquitous language → makes evolution
 costly.
+
+---
+
+## Ticketing App: Sample Domain-Driven Design Blueprint
+
+### 1. Domains, Subdomains & Bounded Contexts
+
+We break the ticketing landscape into four core subdomains, each with its own
+bounded context:
+
+- **Event Management**  
+  • Captures event creation, scheduling, venue details  
+  • Bounded Context: `InventoryContext`
+
+- **Ticket Sales**  
+  • Handles browsing, selecting seats, placing orders  
+  • Bounded Context: `SalesContext`
+
+- **Payment**  
+  • Orchestrates payment authorization, capture, refunds  
+  • Bounded Context: `PaymentContext`
+
+- **Notification**  
+  • Sends emails/SMS for confirmations, cancellations  
+  • Bounded Context: `NotificationContext`
+
+---
+
+### 2. Aggregates, Entities & Value Objects
+
+#### 2.1 InventoryContext
+
+Aggregate Root: `EventInventory`  
+Entities
+
+- `Event` (Id, Name, Date, Venue)
+- `Seat` (SeatNumber, Section, Status)
+
+Value Objects
+
+- `VenueAddress` (Street, City, Zip)
+- `SeatType` (Orchestra, Balcony)
+
+```csharp
+public class EventInventory : IEntity<Guid>
+{
+    public Guid Id { get; private set; }
+    public string Name { get; private set; }
+    public DateTime Date { get; private set; }
+    public VenueAddress Address { get; private set; }
+    private List<Seat> _seats;
+    public IReadOnlyCollection<Seat> Seats => _seats.AsReadOnly();
+
+    // Behavior
+    public void ReserveSeat(string seatNumber)
+    {
+        var seat = _seats.Single(s => s.SeatNumber == seatNumber);
+        seat.MarkReserved();
+        DomainEvents.Raise(new SeatReserved(Id, seatNumber));
+    }
+}
+
+public record VenueAddress(string Street, string City, string Zip);
+
+public class Seat : IEntity<string>
+{
+    public string SeatNumber { get; private set; }
+    public SeatType Type { get; private set; }
+    public SeatStatus Status { get; private set; }
+
+    public void MarkReserved()
+    {
+        if (Status != SeatStatus.Available)
+            throw new InvalidOperationException("Seat not available");
+        Status = SeatStatus.Reserved;
+    }
+}
+```
+
+#### 2.2 SalesContext
+
+Aggregate Root: `Order`  
+Entities
+
+- `OrderLine` (TicketTypeId, Quantity, Price)
+
+Value Objects
+
+- `Money` (Amount, Currency)
+
+```csharp
+public class Order : IEntity<Guid>
+{
+    public Guid Id { get; private set; }
+    public Guid CustomerId { get; private set; }
+    private List<OrderLine> _lines = new();
+    public IReadOnlyCollection<OrderLine> Lines => _lines;
+
+    public void AddLine(Guid ticketTypeId, int qty, Money price)
+    {
+        _lines.Add(new OrderLine(ticketTypeId, qty, price));
+        DomainEvents.Raise(new TicketReservedOnOrder(Id, ticketTypeId, qty));
+    }
+
+    public Money Total() => _lines
+        .Select(l => l.Price.Multiply(l.Quantity))
+        .Aggregate((a, b) => a.Add(b));
+}
+
+public class OrderLine
+{
+    public Guid TicketTypeId { get; private set; }
+    public int Quantity { get; private set; }
+    public Money Price { get; private set; }
+    public OrderLine(Guid ticketTypeId, int qty, Money price)
+    {
+        TicketTypeId = ticketTypeId; Quantity = qty; Price = price;
+    }
+}
+
+public record Money(decimal Amount, string Currency)
+{
+    public Money Add(Money other)
+    {
+        if (Currency != other.Currency)
+            throw new InvalidOperationException("Currency mismatch");
+        return new Money(Amount + other.Amount, Currency);
+    }
+
+    public Money Multiply(int factor) => new(Amount * factor, Currency);
+}
+```
+
+---
+
+### 3. Domain Events
+
+- `SeatReserved(EventId, SeatNumber)`
+- `TicketReservedOnOrder(OrderId, TicketTypeId, Quantity)`
+- `PaymentProcessed(OrderId, Success)`
+- `OrderCompleted(OrderId)`
+
+```csharp
+public static class DomainEvents
+{
+    public static event Action<object> Raised;
+    public static void Raise(object @event) => Raised?.Invoke(@event);
+}
+```
+
+---
+
+### 4. Saga: Coordinating a Ticket Purchase
+
+We implement an **Orchestration Saga** in the SalesContext to coordinate
+inventory, payment, and notifications.
+
+```csharp
+public class PurchaseSaga
+{
+    private readonly IInventoryService _inventory;
+    private readonly IPaymentService _payment;
+    private readonly IOrderRepository _orders;
+
+    public PurchaseSaga(IInventoryService inv, IPaymentService pay, IOrderRepository ord)
+    {
+        _inventory = inv; _payment = pay; _orders = ord;
+        DomainEvents.Raised += Handle;
+    }
+
+    private async void Handle(object @event)
+    {
+        switch (@event)
+        {
+            case TicketReservedOnOrder e:
+                await _payment.AuthorizeAsync(e.OrderId, _orders.Get(e.OrderId).Total());
+                break;
+            case PaymentProcessed e:
+                if (e.Success)
+                    DomainEvents.Raise(new OrderCompleted(e.OrderId));
+                else
+                    await _inventory.ReleaseSeatsAsync(e.OrderId);
+                break;
+            case OrderCompleted e:
+                await _inventory.ConfirmSeatsAsync(e.OrderId);
+                DomainEvents.Raise(new SendConfirmationEmail(e.OrderId));
+                break;
+        }
+    }
+}
+```
+
+---
+
+### 5. Microservice Landscape
+
+| Bounded Context     | Service Name        | Responsibilities                       |
+| ------------------- | ------------------- | -------------------------------------- |
+| InventoryContext    | InventoryService    | Seat management; handling reservations |
+| SalesContext        | SalesService        | Order lifecycle; issuing domain events |
+| PaymentContext      | PaymentService      | Authorize/capture payments             |
+| NotificationContext | NotificationService | Trigger emails/SMS upon events         |
+
+Each service publishes/subscribes to domain events over a message broker (e.g.,
+RabbitMQ).
+
+---
+
+### 6. Next Steps & Best Practices
+
+- Define **Contracts** (DTOs, events) in a shared NuGet to avoid version skew.
+- Layer each service: Application → Domain → Infrastructure.
+- Use **CQRS** to separate read and write models for high-volume ticket queries.
+- Implement retries and dead-letter queues for robust sagas.
+- Secure inter-service communication (mTLS, token-based auth).

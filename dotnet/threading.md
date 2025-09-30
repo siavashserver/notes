@@ -27,8 +27,8 @@ separate. Objects captured through closures and static variables are shared.
 
 ## Foreground vs. Background Thread
 
-_Foreground_ thread keeps process alive, even on main thread exit.
-_Background_ thread gets closed on application exit.
+_Foreground_ thread keeps process alive, even on main thread exit. _Background_
+thread gets closed on application exit.
 
 ## Signaling
 
@@ -703,7 +703,7 @@ public ValueTask<int> GetCachedValueAsync(string key)
 {
     if (_cache.TryGetValue(key, out var val))
         return new ValueTask<int>(val); // no heap allocation
-    
+
     return new ValueTask<int>(FetchAndCacheAsync(key));
 }
 ```
@@ -732,12 +732,12 @@ are some caveats, though:
   modifying it, no exception is thrown—instead, you get a mixture of old and new
   content.
 - The concurrent stack, queue, and bag classes are implemented internally with
-  linked lists. This makes them less memory-efficient than the nonconcurrent Stack
-  and Queue classes, but better for concurrent access because linked lists are
-  conducive to lock-free or low-lock implementations. (This is because inserting a
-  node into a linked list requires updating just a couple of references, whereas
-  inserting an element into a `List<T>` like structure might require moving
-  thousands of existing elements.)
+  linked lists. This makes them less memory-efficient than the nonconcurrent
+  Stack and Queue classes, but better for concurrent access because linked lists
+  are conducive to lock-free or low-lock implementations. (This is because
+  inserting a node into a linked list requires updating just a couple of
+  references, whereas inserting an element into a `List<T>` like structure might
+  require moving thousands of existing elements.)
 
 ### `ConcurrentBag<T>`
 
@@ -748,3 +748,219 @@ queue or stack is that a bag's `Add` method suffers almost no contention when
 called by many threads at once. Inside a concurrent bag, each thread gets its
 own private linked list. Elements are added to the private list that belongs to
 the thread calling Add, eliminating contention.
+
+---
+
+## Sample Two threads printing odd & even numbers (in order)
+
+### 1) `Monitor` (lock + `Monitor.Wait` / `Monitor.Pulse`)
+
+```csharp
+using System;
+using System.Threading;
+
+class MonitorExample
+{
+    static readonly object _lock = new object();
+    static bool _isOddTurn = true;
+
+    static void PrintOdd(int max)
+    {
+        for (int i = 1; i <= max; i += 2)
+        {
+            lock (_lock)
+            {
+                while (!_isOddTurn) Monitor.Wait(_lock);
+                Console.Write(i + " ");
+                _isOddTurn = false;
+                Monitor.Pulse(_lock);
+            }
+        }
+    }
+
+    static void PrintEven(int max)
+    {
+        for (int i = 2; i <= max; i += 2)
+        {
+            lock (_lock)
+            {
+                while (_isOddTurn) Monitor.Wait(_lock);
+                Console.Write(i + " ");
+                _isOddTurn = true;
+                Monitor.Pulse(_lock);
+            }
+        }
+    }
+
+    static void Main()
+    {
+        int max = 20;
+        var t1 = new Thread(() => PrintOdd(max));
+        var t2 = new Thread(() => PrintEven(max));
+        t1.Start();
+        t2.Start();
+        t1.Join();
+        t2.Join();
+        Console.WriteLine("\nDone");
+    }
+}
+```
+
+**How it works / semantics**
+
+- Both threads `lock` the same `object` (`_lock`) before checking a shared
+  condition (`_isOddTurn`).
+- If it's not their turn, they call `Monitor.Wait(_lock)`. `Wait` atomically
+  releases the lock and suspends the thread.
+- The other thread, after printing, flips the boolean and calls
+  `Monitor.Pulse(_lock)` to wake a waiting thread.
+- `Pulse` does **not** release the lock — it simply signals one waiter;
+  releasing happens when the pulsing thread exits the `lock` block.
+- `while` loops are used around `Wait` to defend against spurious wake-ups and
+  re-check the condition.
+
+**Pros**
+
+- Low-level, efficient, full control.
+- Very standard pattern for condition variables in .NET.
+
+**Cons / gotchas**
+
+- Forgetting the `while` (using `if`) can break on spurious wakeups.
+- Must always use `lock`/`Monitor` together; mismatched use causes deadlocks.
+- `Pulse` wakes _one_ waiter; use `PulseAll` only if many waiters need wake.
+
+---
+
+### 2) `AutoResetEvent` (signalling primitives)
+
+```csharp
+using System;
+using System.Threading;
+
+class AutoResetEventExample
+{
+    static AutoResetEvent oddEvent = new AutoResetEvent(true);  // odd starts
+    static AutoResetEvent evenEvent = new AutoResetEvent(false);
+
+    static void PrintOdd(int max)
+    {
+        for (int i = 1; i <= max; i += 2)
+        {
+            oddEvent.WaitOne();  // wait until signalled
+            Console.Write(i + " ");
+            evenEvent.Set();     // signal even thread
+        }
+    }
+
+    static void PrintEven(int max)
+    {
+        for (int i = 2; i <= max; i += 2)
+        {
+            evenEvent.WaitOne();
+            Console.Write(i + " ");
+            oddEvent.Set();
+        }
+    }
+
+    static void Main()
+    {
+        int max = 20;
+        var t1 = new Thread(() => PrintOdd(max));
+        var t2 = new Thread(() => PrintEven(max));
+        t1.Start();
+        t2.Start();
+        t1.Join();
+        t2.Join();
+        Console.WriteLine("\nDone");
+    }
+}
+```
+
+**How it works / semantics**
+
+- `AutoResetEvent` is a kernel/user synchronization primitive. It has a boolean
+  state: signalled or non-signalled.
+- `WaitOne()` blocks the thread until signalled. When signalled,
+  `AutoResetEvent` automatically resets to non-signalled (hence “auto reset”).
+- We initialize `oddEvent` as signalled so the odd thread goes first. After
+  printing, the odd thread calls `evenEvent.Set()` to wake the even thread.
+- No explicit locks are needed because the handoff is purely event-based.
+
+**Pros**
+
+- Simple to reason about; explicit handoffs.
+- Very useful for producer/consumer or strict turn-taking.
+- Works across processes if you use named events (not used here).
+
+**Cons / gotchas**
+
+- Kernel primitive -> slightly higher overhead than pure user-mode `Monitor`
+  (but negligible for usual apps).
+- Must carefully manage initial states of events to avoid hangs.
+
+---
+
+### 3) `SemaphoreSlim` (lightweight counting semaphore)
+
+```csharp
+using System;
+using System.Threading;
+
+class SemaphoreSlimExample
+{
+    static SemaphoreSlim oddSem = new SemaphoreSlim(1, 1);  // odd starts
+    static SemaphoreSlim evenSem = new SemaphoreSlim(0, 1);
+
+    static void PrintOdd(int max)
+    {
+        for (int i = 1; i <= max; i += 2)
+        {
+            oddSem.Wait();
+            Console.Write(i + " ");
+            evenSem.Release();
+        }
+    }
+
+    static void PrintEven(int max)
+    {
+        for (int i = 2; i <= max; i += 2)
+        {
+            evenSem.Wait();
+            Console.Write(i + " ");
+            oddSem.Release();
+        }
+    }
+
+    static void Main()
+    {
+        int max = 20;
+        var t1 = new Thread(() => PrintOdd(max));
+        var t2 = new Thread(() => PrintEven(max));
+        t1.Start();
+        t2.Start();
+        t1.Join();
+        t2.Join();
+        Console.WriteLine("\nDone");
+    }
+}
+```
+
+**How it works / semantics**
+
+- `SemaphoreSlim` maintains a count. `Wait()` decrements (blocking if zero).
+  `Release()` increments.
+- We start `oddSem` with count 1 (so odd can go) and `evenSem` with 0.
+- After the odd thread prints, it `Release`s `evenSem` allowing even to proceed.
+
+**Pros**
+
+- Clear counting semantics; `SemaphoreSlim` is lightweight and efficient.
+- Good when you need to allow a configurable number of permits.
+
+**Cons**
+
+- Using a semaphore for strict alternation is slightly semantically heavier than
+  events but perfectly fine.
+- Must be careful to match `Wait()`/`Release()` calls or the semaphore count
+  drifts.

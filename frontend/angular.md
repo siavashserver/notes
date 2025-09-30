@@ -2294,6 +2294,194 @@ export class HostComponent {
 
 ---
 
+## Performance debugging in Angular
+
+### Prepare and measure
+
+- Reproduce reliably: use a representative page and actions (user flows, slow
+  devices, throttled network/CPU).
+- Establish baseline metrics: First Contentful Paint (FCP), Time to Interactive
+  (TTI), total blocking time, CPU profile, heap snapshots, and change-detection
+  counts.
+- Use the right artifacts: record Chrome DevTools Performance traces, Lighthouse
+  runs, and Angular DevTools component profiler for targeted Angular metrics.
+
+---
+
+### Common Angular performance hotspots and how to detect them
+
+- Change detection churn
+
+  - Symptom: frequent large JS execution blocks and repeated component checks.
+    Detect with Angular DevTools (change detection counts) and DevTools flame
+    charts showing repeated calls into Angular lifecycle hooks.
+  - Fixes: OnPush change detection, detach change detector where appropriate,
+    limit binding expressions, use pure pipes, and call
+    ChangeDetectorRef.markForCheck strategically.
+
+- Large or frequent DOM updates
+
+  - Symptom: long scripting + rendering in Performance panel and many
+    layout/paint events.
+  - Fixes: reduce DOM node count, virtualize long lists (cdk-virtual-scroll),
+    batch DOM updates, and use trackBy on \*ngFor to avoid full re-renders.
+
+- Unbounded Observables / memory leaks
+
+  - Symptom: growing heap over time, subscriptions created repeatedly (e.g., in
+    ngOnInit) without teardown. Detect with heap snapshots and allocation
+    timelines.
+  - Fixes: use async pipe, takeUntil pattern, or Subscription management in
+    services/components.
+
+- Heavy template expressions or expensive getters
+
+  - Symptom: functions/getters called repeatedly during change detection; flame
+    chart shows time in user code.
+  - Fixes: memoize results, move expensive logic out of template, compute once
+    or use pure pipes.
+
+- Large bundle size and slow first load
+
+  - Symptom: high download/parse time on network/coverage reports and big bundle
+    sizes in build output.
+  - Fixes: lazy-load routes/modules, remove unused libraries, enable production
+    builds (AOT, build optimizer), use code-splitting and differential loading.
+
+- Third-party libraries and polyfills cost
+
+  - Symptom: long parse/compile time, big vendor bundle.
+  - Fixes: replace heavy libraries with lighter alternatives, import submodules
+    (not entire libraries).
+
+- Excessive change detection triggers from external events
+
+  - Symptom: zone-triggered checks from intervals, mousemove, scroll.
+  - Fixes: run heavy listeners outside Angular with NgZone.runOutsideAngular and
+    re-enter only when UI updates are required.
+
+- Image/media and network inefficiencies
+  - Symptom: slow FCP and large network payloads.
+  - Fixes: optimize images (responsive sizes, WebP), use HTTP caching, compress
+    JSON, and defer non-critical assets.
+
+---
+
+### Tools and how to use them (practical workflows)
+
+- Chrome DevTools — Performance panel
+
+  - Record a profile while reproducing the issue. Inspect Main thread:
+    scripting, rendering, and paint. Use the Call Tree and Bottom-Up views to
+    find expensive JS functions. Look for long tasks (>50ms) and long frames
+    (>16ms). Use the Memory panel for heap snapshots and allocation stacks.
+
+- Lighthouse
+
+  - Run to get objective metrics (FCP, TTI, total blocking time) and actionable
+    recommendations for load/perf.
+
+- Angular DevTools
+
+  - Use the profiler to measure change-detection counts per component, component
+    render times, and component tree. Identify components re-rendering
+    excessively.
+
+- Network tools
+
+  - DevTools Network tab and WebPageTest (or throttled Chrome) to see load
+    waterfall, payload sizes, and time-to-first-byte.
+
+- Heap and timeline memory profiling
+
+  - Use DevTools Memory snapshots to find detached DOM nodes and retained JS
+    objects. Use allocation timeline to find where allocations are coming from.
+
+- Build analysis
+  - ng build --prod and tools like source-map-explorer or
+    webpack-bundle-analyzer to find large modules and tree-shaking gaps.
+
+---
+
+### Step-by-step debugging checklist (apply this iteratively)
+
+1. Reproduce and document the issue (device, steps, throttling).
+2. Measure baseline: Lighthouse + DevTools Performance + Angular DevTools
+   snapshot.
+3. Identify suspects: examine flame chart for long JS, Angular DevTools for high
+   change-detection counts, Network tab for heavy downloads.
+4. Isolate smallest failing component/page: disable parts or navigate to a
+   minimal route to see if issue persists.
+5. Make focused changes (one at a time): e.g., switch a component to OnPush, add
+   trackBy, memoize a getter, convert subscriptions to async pipe.
+6. Re-measure the same metrics and compare to baseline.
+7. Repeat until acceptable; run end-to-end tests and smoke on target
+   devices/browsers.
+
+---
+
+### Concrete code patterns and examples
+
+- OnPush change detection
+
+```ts
+@Component({
+  selector: "item",
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `...`,
+})
+export class ItemComponent {}
+```
+
+- trackBy for ngFor
+
+```html
+<li *ngFor="let item of items; trackBy: trackById">{{item.name}}</li>
+```
+
+```ts
+trackById(index: number, item: { id: string }) { return item.id; }
+```
+
+- Use async pipe instead of manual subscribe/unsubscribe
+
+```html
+<div *ngFor="let todo of todos$ | async">{{ todo.title }}</div>
+```
+
+- Run heavy listeners outside Angular
+
+```ts
+constructor(private ngZone: NgZone) {}
+ngOnInit() {
+  this.ngZone.runOutsideAngular(() => {
+    window.addEventListener('scroll', this.onScroll);
+  });
+}
+onScroll = () => {
+  // throttle/debounce and only re-enter Angular when needed:
+  this.ngZone.run(() => { /* update UI */ });
+}
+```
+
+- Lazy-load routes (module-level)
+
+```ts
+{ path: 'admin', loadChildren: () => import('./admin/admin.module').then(m => m.AdminModule) }
+```
+
+- Memoize expensive computation
+
+```ts
+private _cache = new Map<string, number>();
+expensive(x: string) {
+  if (!this._cache.has(x)) this._cache.set(x, compute(x));
+  return this._cache.get(x);
+}
+```
+
+---
+
 ## Interview Questions
 
 ### What is the role of `NgZone` in Angular, and when would you opt out of Angular's change detection?
